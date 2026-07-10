@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ComponentLibraryRouteImport } from './routes/component-library'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AnalysisVisualizerRouteImport } from './routes/analysis.visualizer'
 import { Route as AnalysisTruthTableRouteImport } from './routes/analysis.truth-table'
 import { Route as AnalysisSopRouteImport } from './routes/analysis.sop'
 import { Route as AnalysisSimplifierRouteImport } from './routes/analysis.simplifier'
@@ -27,11 +26,6 @@ const ComponentLibraryRoute = ComponentLibraryRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AnalysisVisualizerRoute = AnalysisVisualizerRouteImport.update({
-  id: '/analysis/visualizer',
-  path: '/analysis/visualizer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnalysisTruthTableRoute = AnalysisTruthTableRouteImport.update({
@@ -74,7 +68,6 @@ export interface FileRoutesByFullPath {
   '/analysis/simplifier': typeof AnalysisSimplifierRoute
   '/analysis/sop': typeof AnalysisSopRoute
   '/analysis/truth-table': typeof AnalysisTruthTableRoute
-  '/analysis/visualizer': typeof AnalysisVisualizerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -85,7 +78,6 @@ export interface FileRoutesByTo {
   '/analysis/simplifier': typeof AnalysisSimplifierRoute
   '/analysis/sop': typeof AnalysisSopRoute
   '/analysis/truth-table': typeof AnalysisTruthTableRoute
-  '/analysis/visualizer': typeof AnalysisVisualizerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -97,7 +89,6 @@ export interface FileRoutesById {
   '/analysis/simplifier': typeof AnalysisSimplifierRoute
   '/analysis/sop': typeof AnalysisSopRoute
   '/analysis/truth-table': typeof AnalysisTruthTableRoute
-  '/analysis/visualizer': typeof AnalysisVisualizerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -110,7 +101,6 @@ export interface FileRouteTypes {
     | '/analysis/simplifier'
     | '/analysis/sop'
     | '/analysis/truth-table'
-    | '/analysis/visualizer'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -121,7 +111,6 @@ export interface FileRouteTypes {
     | '/analysis/simplifier'
     | '/analysis/sop'
     | '/analysis/truth-table'
-    | '/analysis/visualizer'
   id:
     | '__root__'
     | '/'
@@ -132,7 +121,6 @@ export interface FileRouteTypes {
     | '/analysis/simplifier'
     | '/analysis/sop'
     | '/analysis/truth-table'
-    | '/analysis/visualizer'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -144,7 +132,6 @@ export interface RootRouteChildren {
   AnalysisSimplifierRoute: typeof AnalysisSimplifierRoute
   AnalysisSopRoute: typeof AnalysisSopRoute
   AnalysisTruthTableRoute: typeof AnalysisTruthTableRoute
-  AnalysisVisualizerRoute: typeof AnalysisVisualizerRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -161,13 +148,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/analysis/visualizer': {
-      id: '/analysis/visualizer'
-      path: '/analysis/visualizer'
-      fullPath: '/analysis/visualizer'
-      preLoaderRoute: typeof AnalysisVisualizerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/analysis/truth-table': {
@@ -224,7 +204,6 @@ const rootRouteChildren: RootRouteChildren = {
   AnalysisSimplifierRoute: AnalysisSimplifierRoute,
   AnalysisSopRoute: AnalysisSopRoute,
   AnalysisTruthTableRoute: AnalysisTruthTableRoute,
-  AnalysisVisualizerRoute: AnalysisVisualizerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
