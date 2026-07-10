@@ -9,38 +9,153 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ComponentLibraryRouteImport } from './routes/component-library'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AnalysisVisualizerRouteImport } from './routes/analysis.visualizer'
+import { Route as AnalysisTruthTableRouteImport } from './routes/analysis.truth-table'
+import { Route as AnalysisSopRouteImport } from './routes/analysis.sop'
+import { Route as AnalysisSimplifierRouteImport } from './routes/analysis.simplifier'
+import { Route as AnalysisPosRouteImport } from './routes/analysis.pos'
+import { Route as AnalysisNandNorRouteImport } from './routes/analysis.nand-nor'
+import { Route as AnalysisKmapRouteImport } from './routes/analysis.kmap'
 
+const ComponentLibraryRoute = ComponentLibraryRouteImport.update({
+  id: '/component-library',
+  path: '/component-library',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AnalysisVisualizerRoute = AnalysisVisualizerRouteImport.update({
+  id: '/analysis/visualizer',
+  path: '/analysis/visualizer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalysisTruthTableRoute = AnalysisTruthTableRouteImport.update({
+  id: '/analysis/truth-table',
+  path: '/analysis/truth-table',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalysisSopRoute = AnalysisSopRouteImport.update({
+  id: '/analysis/sop',
+  path: '/analysis/sop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalysisSimplifierRoute = AnalysisSimplifierRouteImport.update({
+  id: '/analysis/simplifier',
+  path: '/analysis/simplifier',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalysisPosRoute = AnalysisPosRouteImport.update({
+  id: '/analysis/pos',
+  path: '/analysis/pos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalysisNandNorRoute = AnalysisNandNorRouteImport.update({
+  id: '/analysis/nand-nor',
+  path: '/analysis/nand-nor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalysisKmapRoute = AnalysisKmapRouteImport.update({
+  id: '/analysis/kmap',
+  path: '/analysis/kmap',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/component-library': typeof ComponentLibraryRoute
+  '/analysis/kmap': typeof AnalysisKmapRoute
+  '/analysis/nand-nor': typeof AnalysisNandNorRoute
+  '/analysis/pos': typeof AnalysisPosRoute
+  '/analysis/simplifier': typeof AnalysisSimplifierRoute
+  '/analysis/sop': typeof AnalysisSopRoute
+  '/analysis/truth-table': typeof AnalysisTruthTableRoute
+  '/analysis/visualizer': typeof AnalysisVisualizerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/component-library': typeof ComponentLibraryRoute
+  '/analysis/kmap': typeof AnalysisKmapRoute
+  '/analysis/nand-nor': typeof AnalysisNandNorRoute
+  '/analysis/pos': typeof AnalysisPosRoute
+  '/analysis/simplifier': typeof AnalysisSimplifierRoute
+  '/analysis/sop': typeof AnalysisSopRoute
+  '/analysis/truth-table': typeof AnalysisTruthTableRoute
+  '/analysis/visualizer': typeof AnalysisVisualizerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/component-library': typeof ComponentLibraryRoute
+  '/analysis/kmap': typeof AnalysisKmapRoute
+  '/analysis/nand-nor': typeof AnalysisNandNorRoute
+  '/analysis/pos': typeof AnalysisPosRoute
+  '/analysis/simplifier': typeof AnalysisSimplifierRoute
+  '/analysis/sop': typeof AnalysisSopRoute
+  '/analysis/truth-table': typeof AnalysisTruthTableRoute
+  '/analysis/visualizer': typeof AnalysisVisualizerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/component-library'
+    | '/analysis/kmap'
+    | '/analysis/nand-nor'
+    | '/analysis/pos'
+    | '/analysis/simplifier'
+    | '/analysis/sop'
+    | '/analysis/truth-table'
+    | '/analysis/visualizer'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/component-library'
+    | '/analysis/kmap'
+    | '/analysis/nand-nor'
+    | '/analysis/pos'
+    | '/analysis/simplifier'
+    | '/analysis/sop'
+    | '/analysis/truth-table'
+    | '/analysis/visualizer'
+  id:
+    | '__root__'
+    | '/'
+    | '/component-library'
+    | '/analysis/kmap'
+    | '/analysis/nand-nor'
+    | '/analysis/pos'
+    | '/analysis/simplifier'
+    | '/analysis/sop'
+    | '/analysis/truth-table'
+    | '/analysis/visualizer'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ComponentLibraryRoute: typeof ComponentLibraryRoute
+  AnalysisKmapRoute: typeof AnalysisKmapRoute
+  AnalysisNandNorRoute: typeof AnalysisNandNorRoute
+  AnalysisPosRoute: typeof AnalysisPosRoute
+  AnalysisSimplifierRoute: typeof AnalysisSimplifierRoute
+  AnalysisSopRoute: typeof AnalysisSopRoute
+  AnalysisTruthTableRoute: typeof AnalysisTruthTableRoute
+  AnalysisVisualizerRoute: typeof AnalysisVisualizerRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/component-library': {
+      id: '/component-library'
+      path: '/component-library'
+      fullPath: '/component-library'
+      preLoaderRoute: typeof ComponentLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +163,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/analysis/visualizer': {
+      id: '/analysis/visualizer'
+      path: '/analysis/visualizer'
+      fullPath: '/analysis/visualizer'
+      preLoaderRoute: typeof AnalysisVisualizerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analysis/truth-table': {
+      id: '/analysis/truth-table'
+      path: '/analysis/truth-table'
+      fullPath: '/analysis/truth-table'
+      preLoaderRoute: typeof AnalysisTruthTableRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analysis/sop': {
+      id: '/analysis/sop'
+      path: '/analysis/sop'
+      fullPath: '/analysis/sop'
+      preLoaderRoute: typeof AnalysisSopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analysis/simplifier': {
+      id: '/analysis/simplifier'
+      path: '/analysis/simplifier'
+      fullPath: '/analysis/simplifier'
+      preLoaderRoute: typeof AnalysisSimplifierRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analysis/pos': {
+      id: '/analysis/pos'
+      path: '/analysis/pos'
+      fullPath: '/analysis/pos'
+      preLoaderRoute: typeof AnalysisPosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analysis/nand-nor': {
+      id: '/analysis/nand-nor'
+      path: '/analysis/nand-nor'
+      fullPath: '/analysis/nand-nor'
+      preLoaderRoute: typeof AnalysisNandNorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analysis/kmap': {
+      id: '/analysis/kmap'
+      path: '/analysis/kmap'
+      fullPath: '/analysis/kmap'
+      preLoaderRoute: typeof AnalysisKmapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ComponentLibraryRoute: ComponentLibraryRoute,
+  AnalysisKmapRoute: AnalysisKmapRoute,
+  AnalysisNandNorRoute: AnalysisNandNorRoute,
+  AnalysisPosRoute: AnalysisPosRoute,
+  AnalysisSimplifierRoute: AnalysisSimplifierRoute,
+  AnalysisSopRoute: AnalysisSopRoute,
+  AnalysisTruthTableRoute: AnalysisTruthTableRoute,
+  AnalysisVisualizerRoute: AnalysisVisualizerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

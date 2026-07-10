@@ -1,0 +1,266 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { LabPageShell } from "@/components/lab/LabPageShell";
+import { ExprView } from "@/components/lab/ExprView";
+import { buildTruthTable, minterms } from "@/lib/logic/truthtable";
+import { parseMintermList, quineMcCluskey, termToProduct } from "@/lib/logic/qm";
+
+export const Route = createFileRoute("/analysis/kmap")({
+  component: KMapPage,
+});
+
+const GRAY2 = [0, 1]; // 1-var axis
+const GRAY4 = [0, 1, 3, 2]; // 2-var Gray code axis
+
+type InputMode = "expression" | "minterms";
+
+function KMapPage() {
+  const [mode, setMode] = useState<InputMode>("expression");
+  const [expr, setExpr] = useState("AB'C' + BC");
+  const [mintermRaw, setMintermRaw] = useState("sum_of(1,3,5,6,7)");
+  const [numVars, setNumVars] = useState(3);
+  const [dontCareRaw, setDontCareRaw] = useState("");
+  const [varNamesRaw, setVarNamesRaw] = useState("A,B,C");
+
+  const parsed = useMemo(() => {
+    try {
+      if (mode === "expression") {
+        const table = buildTruthTable(expr);
+        return {
+          vars: table.vars,
+          numVars: table.vars.length,
+          requiredMinterms: minterms(table),
+          dontCares: [] as number[],
+          error: null as string | null,
+        };
+      }
+      const vars = varNamesRaw
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+      const n = numVars;
+      const names = vars.length === n ? vars : Array.from({ length: n }, (_, i) => String.fromCharCode(65 + i));
+      const ms = parseMintermList(mintermRaw);
+      const dcs = parseMintermList(dontCareRaw || "()");
+      const max = 1 << n;
+      const invalid = [...ms, ...dcs].find((m) => m >= max || m < 0);
+      if (invalid !== undefined) throw new Error(`Term ${invalid} is out of range for ${n} variables (0–${max - 1})`);
+      return { vars: names, numVars: n, requiredMinterms: ms, dontCares: dcs, error: null as string | null };
+    } catch (e) {
+      return { vars: [], numVars: 0, requiredMinterms: [], dontCares: [], error: e instanceof Error ? e.message : "Invalid input" };
+    }
+  }, [mode, expr, mintermRaw, dontCareRaw, numVars, varNamesRaw]);
+
+  const qm = useMemo(() => {
+    if (parsed.error || parsed.numVars === 0) return null;
+    if (parsed.numVars > 6) return null;
+    return quineMcCluskey(parsed.requiredMinterms, parsed.dontCares, parsed.numVars);
+  }, [parsed]);
+
+  const finalExpr = useMemo(() => {
+    if (!qm) return "";
+    if (qm.selectedImplicants.length === 0) return parsed.requiredMinterms.length === 0 ? "0" : "1";
+    return qm.selectedImplicants.map((t) => termToProduct(t.bits, parsed.vars)).join(" + ");
+  }, [qm, parsed]);
+
+  const canRenderGrid = parsed.numVars >= 2 && parsed.numVars <= 4;
+  const rowAxis = parsed.numVars === 4 ? GRAY4 : parsed.numVars === 3 ? GRAY2 : GRAY2;
+  const colAxis = parsed.numVars === 4 ? GRAY4 : parsed.numVars === 3 ? GRAY4 : GRAY2;
+  const rowVars = parsed.numVars === 4 ? 2 : parsed.numVars === 3 ? 1 : 1;
+  const colVars = parsed.numVars - rowVars;
+
+  function cellValue(rowGray: number, colGray: number): "1" | "0" | "X" {
+    const rowBits = rowGray.toString(2).padStart(rowVars, "0");
+    const colBits = colGray.toString(2).padStart(colVars, "0");
+    const index = parseInt(rowBits + colBits, 2);
+    if (parsed.requiredMinterms.includes(index)) return "1";
+    if (parsed.dontCares.includes(index)) return "X";
+    return "0";
+  }
+
+  return (
+    <LabPageShell
+      eyebrow="ANALYSIS TOOL"
+      title="K-MAP SOLVER"
+      description="Plots a Karnaugh map and derives the minimal SOP using Quine-McCluskey grouping — shows every pairing step, which variable each group drops, and how don't-cares get folded in without being forced into the final answer."
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        {(["expression", "minterms"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            aria-pressed={mode === m}
+            className="rounded-full border px-3 py-1 font-mono text-[10px] tracking-[0.15em] transition"
+            style={
+              mode === m
+                ? { borderColor: "var(--lab-purple)", color: "var(--lab-purple)", boxShadow: "0 0 8px var(--lab-purple)" }
+                : { borderColor: "var(--lab-border)", color: "var(--lab-muted)" }
+            }
+          >
+            {m === "expression" ? "FROM EQUATION" : "FROM Σ MINTERMS"}
+          </button>
+        ))}
+      </div>
+
+      {mode === "expression" ? (
+        <input
+          value={expr}
+          onChange={(e) => setExpr(e.target.value)}
+          spellCheck={false}
+          placeholder="e.g. AB'C' + BC"
+          className="mt-3 w-full rounded-md border border-[var(--lab-border)] bg-[oklch(0.11_0.03_260/.8)] px-3 py-2 font-mono text-sm text-[var(--lab-cyan)] outline-none focus:border-[var(--lab-cyan)]"
+        />
+      ) : (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs text-[var(--lab-muted)]">
+            Minterms — Σ(...)
+            <input
+              value={mintermRaw}
+              onChange={(e) => setMintermRaw(e.target.value)}
+              spellCheck={false}
+              placeholder="sum_of(1,3,5,6,7)"
+              className="mt-1 w-full rounded-md border border-[var(--lab-border)] bg-[oklch(0.11_0.03_260/.8)] px-3 py-2 font-mono text-sm text-[var(--lab-cyan)] outline-none focus:border-[var(--lab-cyan)]"
+            />
+          </label>
+          <label className="text-xs text-[var(--lab-muted)]">
+            Don't-care terms
+            <input
+              value={dontCareRaw}
+              onChange={(e) => setDontCareRaw(e.target.value)}
+              spellCheck={false}
+              placeholder="d(2,4)"
+              className="mt-1 w-full rounded-md border border-[var(--lab-border)] bg-[oklch(0.11_0.03_260/.8)] px-3 py-2 font-mono text-sm text-[var(--lab-warm)] outline-none focus:border-[var(--lab-warm)]"
+            />
+          </label>
+          <label className="text-xs text-[var(--lab-muted)]">
+            Number of variables
+            <input
+              type="number"
+              min={2}
+              max={6}
+              value={numVars}
+              onChange={(e) => setNumVars(Math.max(2, Math.min(6, Number(e.target.value) || 2)))}
+              className="mt-1 w-full rounded-md border border-[var(--lab-border)] bg-[oklch(0.11_0.03_260/.8)] px-3 py-2 font-mono text-sm text-[var(--lab-ink)] outline-none focus:border-[var(--lab-cyan)]"
+            />
+          </label>
+          <label className="text-xs text-[var(--lab-muted)]">
+            Variable names (optional)
+            <input
+              value={varNamesRaw}
+              onChange={(e) => setVarNamesRaw(e.target.value)}
+              spellCheck={false}
+              placeholder="A,B,C"
+              className="mt-1 w-full rounded-md border border-[var(--lab-border)] bg-[oklch(0.11_0.03_260/.8)] px-3 py-2 font-mono text-sm text-[var(--lab-ink)] outline-none focus:border-[var(--lab-cyan)]"
+            />
+          </label>
+        </div>
+      )}
+
+      {mode === "expression" && parsed.dontCares.length === 0 && (
+        <p className="mt-2 font-mono text-[10px] tracking-[0.15em] text-[var(--lab-muted)]">
+          Tip: switch to "FROM Σ MINTERMS" to specify don't-care terms directly.
+        </p>
+      )}
+
+      {parsed.error && <p className="mt-3 font-mono text-xs text-[var(--lab-pink)]">⚠ {parsed.error}</p>}
+
+      {!parsed.error && parsed.numVars > 6 && (
+        <p className="mt-3 font-mono text-xs text-[var(--lab-pink)]">⚠ Supports up to 6 variables.</p>
+      )}
+
+      {!parsed.error && canRenderGrid && (
+        <div className="mt-6 overflow-x-auto">
+          <div
+            className="inline-grid gap-1"
+            style={{ gridTemplateColumns: `auto repeat(${colAxis.length}, 3rem)` }}
+          >
+            <div />
+            {colAxis.map((c) => (
+              <div key={c} className="text-center font-mono text-[10px] tracking-[0.15em] text-[var(--lab-muted)]">
+                {c.toString(2).padStart(colVars, "0")}
+              </div>
+            ))}
+            {rowAxis.map((r) => (
+              <div key={`row-${r}`} style={{ display: "contents" }}>
+                <div className="pr-2 text-right font-mono text-[10px] tracking-[0.15em] text-[var(--lab-muted)]">
+                  {r.toString(2).padStart(rowVars, "0")}
+                </div>
+                {colAxis.map((c) => {
+                  const v = cellValue(r, c);
+                  return (
+                    <div
+                      key={`${r}-${c}`}
+                      className={`flex h-12 w-12 items-center justify-center rounded-md border border-[var(--lab-border)] bg-[oklch(0.14_0.03_265/.6)] text-sm font-bold ${
+                        v === "1" ? "text-[var(--lab-mint)]" : v === "X" ? "text-[var(--lab-warm)]" : "text-[var(--lab-muted)]"
+                      }`}
+                    >
+                      {v}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 font-mono text-[10px] tracking-[0.15em] text-[var(--lab-muted)]">
+            rows = {parsed.vars.slice(0, rowVars).join("")} · columns = {parsed.vars.slice(rowVars).join("")} · <span className="text-[var(--lab-warm)]">X</span> = don't care
+          </p>
+        </div>
+      )}
+
+      {qm && (
+        <>
+          <h2 className="mt-6 text-xs tracking-[0.25em] text-[var(--lab-muted)]">GROUPING STEPS</h2>
+          {qm.steps.length === 0 ? (
+            <p className="mt-2 font-mono text-xs text-[var(--lab-muted)]">No adjacent terms could be combined — every minterm is already its own prime implicant.</p>
+          ) : (
+            <ol className="mt-2 space-y-2">
+              {qm.steps.map((step) => (
+                <li key={step.round} className="rounded-md border border-[var(--lab-border)] bg-[oklch(0.12_0.03_265/.5)] px-3 py-2">
+                  <p className="text-[10px] tracking-[0.15em] text-[var(--lab-purple)]">ROUND {step.round} — combine terms differing in exactly one bit</p>
+                  <ul className="mt-1 space-y-0.5 font-mono text-xs text-[var(--lab-muted)]">
+                    {step.combined.map((c, i) => (
+                      <li key={i}>
+                        {c.from[0]} + {c.from[1]} → <span className="text-[var(--lab-cyan)]">{c.result}</span>{" "}
+                        <span className="text-[var(--lab-muted)]">(drops {parsed.vars[c.droppedVarIndex] ?? "?"})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <h2 className="mt-6 text-xs tracking-[0.25em] text-[var(--lab-muted)]">PRIME IMPLICANTS</h2>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {qm.primeImplicants.map((pi) => (
+              <span
+                key={pi.bits}
+                className={`rounded-md border px-2 py-1 font-mono text-xs ${
+                  qm.selectedImplicants.some((s) => s.bits === pi.bits)
+                    ? "border-[var(--lab-mint)] text-[var(--lab-mint)]"
+                    : "border-[var(--lab-border)] text-[var(--lab-muted)]"
+                }`}
+              >
+                <ExprView expr={termToProduct(pi.bits, parsed.vars)} /> · covers {pi.covers.join(",")}
+              </span>
+            ))}
+          </div>
+
+          <h2 className="mt-6 text-xs tracking-[0.25em] text-[var(--lab-muted)]">ESSENTIAL PRIME IMPLICANTS</h2>
+          <p className="mt-2 font-mono text-xs text-[var(--lab-muted)]">
+            {qm.essentialPrimeImplicants.length > 0
+              ? qm.essentialPrimeImplicants.map((t) => termToProduct(t.bits, parsed.vars)).join(", ")
+              : "None — every minterm is covered by more than one prime implicant, so terms were chosen to cover the rest."}
+          </p>
+
+          <div className="mt-4 rounded-md border border-[var(--lab-purple)] bg-[oklch(0.30_0.14_305/.20)] px-4 py-3 lab-glow-purple">
+            <p className="text-[10px] tracking-[0.2em] text-[var(--lab-muted)]">MINIMAL SOP</p>
+            <p className="mt-1 break-words text-xl font-bold text-[var(--lab-purple)]">
+              Y = <ExprView expr={finalExpr} />
+            </p>
+          </div>
+        </>
+      )}
+    </LabPageShell>
+  );
+}
