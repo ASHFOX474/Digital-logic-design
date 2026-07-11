@@ -15,7 +15,7 @@ export function TruthTable() {
   return (
     <section className="lab-panel relative overflow-hidden p-5">
       <div className="lab-scanline" aria-hidden />
-      <PanelHeader eyebrow="DATA · 02" title="TRUTH TABLE" accent="var(--lab-mint)" />
+      <PanelHeader eyebrow="TOOL · 02" title="TRUTH TABLE" accent="var(--lab-mint)" />
       <table className="mt-3 w-full border-separate border-spacing-y-1 text-center font-mono text-sm">
         <thead>
           <tr className="text-[10px] tracking-[0.3em] text-[var(--lab-muted)]">

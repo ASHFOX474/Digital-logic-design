@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VirtualLabRouteImport } from './routes/virtual-lab'
 import { Route as ComponentLibraryRouteImport } from './routes/component-library'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AnalysisVisualizerRouteImport } from './routes/analysis.visualizer'
@@ -20,6 +21,11 @@ import { Route as AnalysisPosRouteImport } from './routes/analysis.pos'
 import { Route as AnalysisNandNorRouteImport } from './routes/analysis.nand-nor'
 import { Route as AnalysisKmapRouteImport } from './routes/analysis.kmap'
 
+const VirtualLabRoute = VirtualLabRouteImport.update({
+  id: '/virtual-lab',
+  path: '/virtual-lab',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ComponentLibraryRoute = ComponentLibraryRouteImport.update({
   id: '/component-library',
   path: '/component-library',
@@ -74,6 +80,7 @@ const AnalysisKmapRoute = AnalysisKmapRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/component-library': typeof ComponentLibraryRoute
+  '/virtual-lab': typeof VirtualLabRoute
   '/analysis/kmap': typeof AnalysisKmapRoute
   '/analysis/nand-nor': typeof AnalysisNandNorRoute
   '/analysis/pos': typeof AnalysisPosRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/component-library': typeof ComponentLibraryRoute
+  '/virtual-lab': typeof VirtualLabRoute
   '/analysis/kmap': typeof AnalysisKmapRoute
   '/analysis/nand-nor': typeof AnalysisNandNorRoute
   '/analysis/pos': typeof AnalysisPosRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/component-library': typeof ComponentLibraryRoute
+  '/virtual-lab': typeof VirtualLabRoute
   '/analysis/kmap': typeof AnalysisKmapRoute
   '/analysis/nand-nor': typeof AnalysisNandNorRoute
   '/analysis/pos': typeof AnalysisPosRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/component-library'
+    | '/virtual-lab'
     | '/analysis/kmap'
     | '/analysis/nand-nor'
     | '/analysis/pos'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/component-library'
+    | '/virtual-lab'
     | '/analysis/kmap'
     | '/analysis/nand-nor'
     | '/analysis/pos'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/component-library'
+    | '/virtual-lab'
     | '/analysis/kmap'
     | '/analysis/nand-nor'
     | '/analysis/pos'
@@ -150,6 +162,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ComponentLibraryRoute: typeof ComponentLibraryRoute
+  VirtualLabRoute: typeof VirtualLabRoute
   AnalysisKmapRoute: typeof AnalysisKmapRoute
   AnalysisNandNorRoute: typeof AnalysisNandNorRoute
   AnalysisPosRoute: typeof AnalysisPosRoute
@@ -162,6 +175,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/virtual-lab': {
+      id: '/virtual-lab'
+      path: '/virtual-lab'
+      fullPath: '/virtual-lab'
+      preLoaderRoute: typeof VirtualLabRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/component-library': {
       id: '/component-library'
       path: '/component-library'
@@ -238,6 +258,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ComponentLibraryRoute: ComponentLibraryRoute,
+  VirtualLabRoute: VirtualLabRoute,
   AnalysisKmapRoute: AnalysisKmapRoute,
   AnalysisNandNorRoute: AnalysisNandNorRoute,
   AnalysisPosRoute: AnalysisPosRoute,

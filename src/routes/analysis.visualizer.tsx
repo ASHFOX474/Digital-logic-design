@@ -8,21 +8,59 @@ export const Route = createFileRoute("/analysis/visualizer")({
   component: VisualizerPage,
 });
 
-const VARS = ["A", "B", "C", "D"] as const;
-type Var = (typeof VARS)[number];
+// Color palette cycled across however many variables actually appear in the
+// expression — no longer limited to a fixed A–D tuple.
+const VAR_PALETTE = [
+  "var(--lab-pink)",
+  "var(--lab-cyan)",
+  "var(--lab-mint)",
+  "oklch(0.90 0.19 95)",
+  "oklch(0.75 0.15 200)",
+  "oklch(0.70 0.20 320)",
+  "oklch(0.80 0.18 140)",
+  "oklch(0.65 0.20 30)",
+];
 
-const VAR_COLOR: Record<Var, string> = {
-  A: "var(--lab-pink)",
-  B: "var(--lab-cyan)",
-  C: "var(--lab-mint)",
-  D: "oklch(0.90 0.19 95)",
-};
+// Multi-letter operator keywords that must NOT be mistaken for variable
+// names when scanning the raw expression string. Longer keywords first so
+// e.g. "XNOR" isn't partially consumed by the "XOR" pattern.
+const OPERATOR_KEYWORDS = /\b(XNOR|NAND|NOR|XOR|AND|OR|NOT)\b/gi;
+
+/** Extracts the set of single-letter variable names used in an expression,
+ * in first-appearance order, ignoring operator keywords. */
+function extractVars(expr: string): string[] {
+  const withoutKeywords = expr.replace(OPERATOR_KEYWORDS, " ");
+  const seen: string[] = [];
+  for (const ch of withoutKeywords) {
+    if (/[A-Za-z]/.test(ch)) {
+      const upper = ch.toUpperCase();
+      if (!seen.includes(upper)) seen.push(upper);
+    }
+  }
+  return seen;
+}
 
 function VisualizerPage() {
   const [expr, setExpr] = useState("AB' + BC'");
-  const [vals, setVals] = useState<Record<Var, boolean>>({ A: true, B: false, C: true, D: false });
+  const [valsMap, setValsMap] = useState<Record<string, boolean>>({ A: true, B: false, C: true, D: false });
 
-  const toggle = (v: Var) => setVals((prev) => ({ ...prev, [v]: !prev[v] }));
+  const varNames = useMemo(() => extractVars(expr), [expr]);
+
+  const varColor = useMemo(() => {
+    const map: Record<string, string> = {};
+    varNames.forEach((v, i) => { map[v] = VAR_PALETTE[i % VAR_PALETTE.length]; });
+    return map;
+  }, [varNames]);
+
+  // Only expose the variables actually present in the current expression to
+  // the evaluator/circuit renderer, defaulting freshly-seen ones to false.
+  const vals = useMemo(() => {
+    const v: Record<string, boolean> = {};
+    varNames.forEach((name) => { v[name] = valsMap[name] ?? false; });
+    return v;
+  }, [varNames, valsMap]);
+
+  const toggle = (v: string) => setValsMap((prev) => ({ ...prev, [v]: !(prev[v] ?? false) }));
 
   const { value: output, error } = tryEval(expr, vals);
   const exprError = !!error;
@@ -66,34 +104,40 @@ function VisualizerPage() {
 
       {/* Input toggles */}
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {VARS.map((v) => (
-          <button
-            key={v}
-            onClick={() => toggle(v)}
-            role="switch"
-            aria-checked={vals[v]}
-            className="flex items-center justify-between rounded-lg border border-[var(--lab-border)] bg-[oklch(0.15_0.04_265/.7)] px-4 py-3 transition hover:border-[var(--lab-cyan)]"
-          >
-            <span className="font-mono text-lg font-bold" style={{ color: VAR_COLOR[v] }}>{v}</span>
-            <div className="flex flex-col items-end gap-0.5">
-              <span
-                className="relative inline-block h-6 w-12 rounded-full transition"
-                style={{
-                  background: vals[v] ? VAR_COLOR[v] : "oklch(0.22 0.04 265)",
-                  boxShadow: vals[v] ? `0 0 12px ${VAR_COLOR[v]}` : "inset 0 0 4px oklch(0 0 0/.7)",
-                }}
-              >
+        {varNames.length === 0 ? (
+          <p className="col-span-full font-mono text-[10px] text-[var(--lab-muted)]">
+            No variables detected yet — type an expression above.
+          </p>
+        ) : (
+          varNames.map((v) => (
+            <button
+              key={v}
+              onClick={() => toggle(v)}
+              role="switch"
+              aria-checked={vals[v]}
+              className="flex items-center justify-between rounded-lg border border-[var(--lab-border)] bg-[oklch(0.15_0.04_265/.7)] px-4 py-3 transition hover:border-[var(--lab-cyan)]"
+            >
+              <span className="font-mono text-lg font-bold" style={{ color: varColor[v] }}>{v}</span>
+              <div className="flex flex-col items-end gap-0.5">
                 <span
-                  className="absolute top-1 h-4 w-4 rounded-full bg-[oklch(0.98_0.01_250)] transition-all"
-                  style={{ left: vals[v] ? "28px" : "4px" }}
-                />
-              </span>
-              <span className="font-mono text-[10px]" style={{ color: vals[v] ? VAR_COLOR[v] : "var(--lab-muted)" }}>
-                {v} = {vals[v] ? 1 : 0}
-              </span>
-            </div>
-          </button>
-        ))}
+                  className="relative inline-block h-6 w-12 rounded-full transition"
+                  style={{
+                    background: vals[v] ? varColor[v] : "oklch(0.22 0.04 265)",
+                    boxShadow: vals[v] ? `0 0 12px ${varColor[v]}` : "inset 0 0 4px oklch(0 0 0/.7)",
+                  }}
+                >
+                  <span
+                    className="absolute top-1 h-4 w-4 rounded-full bg-[oklch(0.98_0.01_250)] transition-all"
+                    style={{ left: vals[v] ? "28px" : "4px" }}
+                  />
+                </span>
+                <span className="font-mono text-[10px]" style={{ color: vals[v] ? varColor[v] : "var(--lab-muted)" }}>
+                  {v} = {vals[v] ? 1 : 0}
+                </span>
+              </div>
+            </button>
+          ))
+        )}
       </div>
 
       {/* Circuit diagram */}
@@ -111,6 +155,7 @@ function VisualizerPage() {
           <div className="flex h-full min-h-[200px] items-center justify-center">
             <div className="text-center">
               <p className="font-mono text-sm text-[var(--lab-pink)]">⚠ Invalid expression</p>
+              <p className="font-mono text-sm text-[var(--lab-pink)]">Or Empty Input Box</p>
               <p className="mt-1 font-mono text-[10px] text-[var(--lab-muted)]">
                 Check syntax — variables must be single letters (A–Z)
               </p>
@@ -122,13 +167,13 @@ function VisualizerPage() {
       {/* Signal summary */}
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-[var(--lab-border)] bg-[oklch(0.12_0.03_265/.5)] px-4 py-3 font-mono text-xs">
         <span className="text-[var(--lab-muted)] tracking-[0.15em]">SIGNALS:</span>
-        {VARS.map((v) => (
+        {varNames.map((v) => (
           <span
             key={v}
             className="rounded border px-2 py-0.5"
             style={{
-              borderColor: vals[v] ? VAR_COLOR[v] : "var(--lab-border)",
-              color: vals[v] ? VAR_COLOR[v] : "var(--lab-muted)",
+              borderColor: vals[v] ? varColor[v] : "var(--lab-border)",
+              color: vals[v] ? varColor[v] : "var(--lab-muted)",
             }}
           >
             {v}={vals[v] ? 1 : 0}

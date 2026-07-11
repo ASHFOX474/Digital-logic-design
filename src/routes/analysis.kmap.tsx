@@ -29,8 +29,26 @@ const STEP_COLORS = [
 const CELL = 48; // px, matches h-12 w-12
 const GAP = 4; // px, matches gap-1
 
+/**
+ * DeMorgan's theorem, applied per-term: a grouped 0-cell prime implicant is a
+ * product of literals (e.g. AB, meaning A·B). Its complement — which is what
+ * a POS factor contributes — is the OR of each literal's complement (A'+B').
+ * This mirrors termToProduct's bit convention (bit '1' -> plain literal,
+ * bit '0' -> primed literal, '-' -> dropped), just flipped and OR-joined.
+ */
+function termToSum(bits: string, vars: string[]): string {
+  const parts: string[] = [];
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] === "-") continue;
+    parts.push(bits[i] === "1" ? `${vars[i]}'` : vars[i]);
+  }
+  if (parts.length === 0) return "1";
+  return `(${parts.join("+")})`;
+}
+
 function KMapPage() {
   const [mode, setMode] = useState<InputMode>("expression");
+  const [outputForm, setOutputForm] = useState<"SOP" | "POS">("SOP");
   const [expr, setExpr] = useState("AB'C' + BC");
   const [mintermRaw, setMintermRaw] = useState("sum_of(1,3,5,6,7)");
   const [numVars, setNumVars] = useState(3);
@@ -93,26 +111,64 @@ function KMapPage() {
     return qm.selectedImplicants.map((t) => termToProduct(t.bits, parsed.vars)).join(" + ");
   }, [qm, parsed]);
 
+  // --- POS support: group the 0-cells (i.e. minimize F') and DeMorgan the result into a POS. ---
+
+  const zeroMinterms = useMemo(() => {
+    if (parsed.error || parsed.numVars === 0) return [];
+    const total = 1 << parsed.numVars;
+    const ones = new Set(parsed.requiredMinterms);
+    const dcs = new Set(parsed.dontCares);
+    const zeros: number[] = [];
+    for (let i = 0; i < total; i++) {
+      if (!ones.has(i) && !dcs.has(i)) zeros.push(i);
+    }
+    return zeros;
+  }, [parsed]);
+
+  const qmZero = useMemo(() => {
+    if (parsed.error || parsed.numVars === 0) return null;
+    if (parsed.numVars > 6) return null;
+    return quineMcCluskey(zeroMinterms, parsed.dontCares, parsed.numVars);
+  }, [zeroMinterms, parsed]);
+
+  // F' — the minimal SOP that covers the 0-cells.
+  const finalExprZero = useMemo(() => {
+    if (!qmZero) return "";
+    if (qmZero.selectedImplicants.length === 0) return zeroMinterms.length === 0 ? "0" : "1";
+    return qmZero.selectedImplicants.map((t) => termToProduct(t.bits, parsed.vars)).join(" + ");
+  }, [qmZero, parsed, zeroMinterms]);
+
+  // F — DeMorgan applied to F', term-by-term, to get the POS form.
+  const posExpr = useMemo(() => {
+    if (!qmZero) return "";
+    if (qmZero.selectedImplicants.length === 0) return finalExprZero === "1" ? "0" : "1";
+    return qmZero.selectedImplicants.map((t) => termToSum(t.bits, parsed.vars)).join("");
+  }, [qmZero, parsed, finalExprZero]);
+
+  // Whichever QM result is currently driving the map + step walkthrough.
+  const activeQm = outputForm === "SOP" ? qm : qmZero;
+
   const layout = useMemo(() => {
     if (!qm || parsed.numVars < 2 || parsed.numVars > 6) return null;
     return computeLayout(parsed.numVars, parsed.vars);
   }, [qm, parsed]);
 
-  // The interactive grouping steps shown on the map: one per selected (minimal-cover) prime implicant.
+  // The interactive grouping steps shown on the map: one per selected (minimal-cover) prime
+  // implicant of whichever function is active — the 1s for SOP, or the 0s (i.e. F') for POS.
   const groupingSteps = useMemo(() => {
-    if (!qm || !layout) return [];
-    return qm.selectedImplicants.map((t, i) => ({
+    if (!activeQm || !layout) return [];
+    return activeQm.selectedImplicants.map((t, i) => ({
       bits: t.bits,
       term: termToProduct(t.bits, parsed.vars),
       cells: t.covers,
       color: STEP_COLORS[i % STEP_COLORS.length],
     }));
-  }, [qm, layout, parsed]);
+  }, [activeQm, layout, parsed]);
 
-  // Reset the walkthrough whenever the underlying problem changes.
+  // Reset the walkthrough whenever the underlying problem or the SOP/POS mode changes.
   useEffect(() => {
     setCurrentStepIndex(-1);
-  }, [qm]);
+  }, [qm, qmZero, outputForm]);
 
   function cellValue(
     l: KMapLayout,
@@ -164,6 +220,37 @@ function KMapPage() {
             }
           >
             {m === "expression" ? "FROM EQUATION" : "FROM Σ MINTERMS"}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[9px] tracking-[0.2em] text-[var(--lab-muted)]">
+          OUTPUT FORM
+        </span>
+        {(["SOP", "POS"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setOutputForm(f)}
+            aria-pressed={outputForm === f}
+            className="rounded-full border px-3 py-1 font-mono text-[10px] tracking-[0.15em] transition"
+            style={
+              outputForm === f
+                ? f === "SOP"
+                  ? {
+                      borderColor: "var(--lab-cyan)",
+                      color: "var(--lab-cyan)",
+                      boxShadow: "0 0 8px var(--lab-cyan)",
+                    }
+                  : {
+                      borderColor: "var(--lab-pink)",
+                      color: "var(--lab-pink)",
+                      boxShadow: "0 0 8px var(--lab-pink)",
+                    }
+                : { borderColor: "var(--lab-border)", color: "var(--lab-muted)" }
+            }
+          >
+            {f === "SOP" ? "SOP · GROUP 1s" : "POS · GROUP 0s"}
           </button>
         ))}
       </div>
@@ -271,17 +358,28 @@ function KMapPage() {
                       {layout.colAxis.map((c) => {
                         const v = cellValue(layout, block.blockValue, r, c);
                         const idx = cellIndex(layout, block.blockValue, r, c);
+                        // SOP groups the 1-cells; POS groups the 0-cells (to find F', then DeMorgan).
+                        const isActive = outputForm === "SOP" ? v === "1" : v === "0";
+                        const activeBorder =
+                          outputForm === "SOP" ? "var(--lab-mint)" : "var(--lab-pink)";
                         return (
                           <div
                             key={`${r}-${c}`}
-                            className={`relative flex items-center justify-center rounded-md border border-[var(--lab-border)] bg-[oklch(0.14_0.03_265/.6)] text-sm font-bold ${
-                              v === "1"
-                                ? "text-[var(--lab-mint)]"
+                            className={`relative flex items-center justify-center rounded-md border bg-[oklch(0.14_0.03_265/.6)] text-sm font-bold transition-colors ${
+                              isActive
+                                ? outputForm === "SOP"
+                                  ? "border-[var(--lab-mint)] text-[var(--lab-mint)]"
+                                  : "border-[var(--lab-pink)] text-[var(--lab-pink)]"
                                 : v === "X"
-                                  ? "text-[var(--lab-warm)]"
-                                  : "text-[var(--lab-muted)]"
+                                  ? "border-[var(--lab-border)] text-[var(--lab-warm)]"
+                                  : "border-[var(--lab-border)] text-[var(--lab-muted)]"
                             }`}
-                            style={{ height: CELL, width: CELL }}
+                            style={{
+                              height: CELL,
+                              width: CELL,
+                              animation: isActive ? "lab-pulse 2s ease-in-out infinite" : undefined,
+                              boxShadow: isActive ? `0 0 6px ${activeBorder}` : undefined,
+                            }}
                           >
                             <span className="absolute left-1 top-0.5 font-mono text-[7px] text-[var(--lab-muted)] opacity-60">
                               {idx}
@@ -351,111 +449,102 @@ function KMapPage() {
       {groupingSteps.length > 0 && (
         <div className="mt-6 rounded-md border border-[var(--lab-border)] bg-[oklch(0.12_0.03_265/.5)] p-4">
           <p className="text-[10px] tracking-[0.25em] text-[var(--lab-muted)]">
-            STEP-BY-STEP GROUPING
+            {outputForm === "SOP" ? "STEP-BY-STEP GROUPING (1s)" : "STEP-BY-STEP GROUPING (0s → F′)"}
           </p>
 
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              onClick={() => setCurrentStepIndex((i) => Math.max(-1, i - 1))}
-              disabled={currentStepIndex <= -1}
-              className="lab-menu-btn px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              ◀ Previous Step
-            </button>
-            <button
-              onClick={() => setCurrentStepIndex((i) => Math.min(groupingSteps.length - 1, i + 1))}
-              disabled={currentStepIndex >= groupingSteps.length - 1}
-              className="lab-menu-btn px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              Next Step ▶
-            </button>
-            <span className="font-mono text-[10px] tracking-[0.15em] text-[var(--lab-muted)]">
-              {currentStepIndex + 1} / {groupingSteps.length}
-            </span>
-          </div>
+          {/* currentStepIndex is reset to -1 in a useEffect whenever qm/qmZero/outputForm change,
+              but that effect runs *after* this render — so on the render where e.g. outputForm
+              just flipped (and groupingSteps got shorter), currentStepIndex can still momentarily
+              point past the end of the new groupingSteps array. Clamp defensively so we never
+              index out of bounds before the effect catches up. */}
+          {(() => {
+            const safeStepIndex =
+              currentStepIndex >= groupingSteps.length ? -1 : currentStepIndex;
+            return (
+              <>
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    onClick={() => setCurrentStepIndex((i) => Math.max(-1, i - 1))}
+                    disabled={safeStepIndex <= -1}
+                    className="lab-menu-btn px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    ◀ Previous Step
+                  </button>
+                  <button
+                    onClick={() =>
+                      setCurrentStepIndex((i) => Math.min(groupingSteps.length - 1, i + 1))
+                    }
+                    disabled={safeStepIndex >= groupingSteps.length - 1}
+                    className="lab-menu-btn px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    Next Step ▶
+                  </button>
+                  <span className="font-mono text-[10px] tracking-[0.15em] text-[var(--lab-muted)]">
+                    {safeStepIndex + 1} / {groupingSteps.length}
+                  </span>
+                </div>
 
-          {currentStepIndex >= 0 && (
-            <p
-              className="mt-2 flex items-center gap-2 font-mono text-xs"
-              style={{ color: groupingSteps[currentStepIndex].color }}
-            >
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ background: groupingSteps[currentStepIndex].color }}
-              />
-              Group {currentStepIndex + 1}: <ExprView expr={groupingSteps[currentStepIndex].term} />{" "}
-              · covers {groupingSteps[currentStepIndex].cells.join(", ")}
-            </p>
-          )}
+                {safeStepIndex >= 0 && (
+                  <p
+                    className="mt-2 flex items-center gap-2 font-mono text-xs"
+                    style={{ color: groupingSteps[safeStepIndex].color }}
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ background: groupingSteps[safeStepIndex].color }}
+                    />
+                    Group {safeStepIndex + 1}: <ExprView expr={groupingSteps[safeStepIndex].term} />{" "}
+                    · covers {groupingSteps[safeStepIndex].cells.join(", ")}
+                  </p>
+                )}
 
-          <div
-            key={currentStepIndex}
-            className="mt-4 rounded-md border border-[var(--lab-cyan)] bg-[oklch(0.20_0.10_200/.25)] px-4 py-3 lab-glow-cyan"
-            style={{ animation: "lab-pulse 1.6s ease-in-out 1" }}
-          >
-            <p className="text-[10px] tracking-[0.2em] text-[var(--lab-muted)]">EQUATION SO FAR</p>
-            <p className="mt-1 break-words text-xl font-bold text-[var(--lab-cyan)]">
-              F ={" "}
-              {currentStepIndex === -1 ? (
-                "0"
-              ) : (
-                <ExprView
-                  expr={groupingSteps
-                    .slice(0, currentStepIndex + 1)
-                    .map((s) => s.term)
-                    .join(" + ")}
-                />
-              )}
-            </p>
-          </div>
+                <div
+                  key={safeStepIndex}
+                  className={`mt-4 rounded-md border px-4 py-3 ${
+                    outputForm === "SOP"
+                      ? "border-[var(--lab-cyan)] bg-[oklch(0.20_0.10_200/.25)] lab-glow-cyan"
+                      : "border-[var(--lab-pink)] bg-[oklch(0.20_0.10_340/.25)]"
+                  }`}
+                  style={{ animation: "lab-pulse 1.6s ease-in-out 1" }}
+                >
+                  <p className="text-[10px] tracking-[0.2em] text-[var(--lab-muted)]">
+                    {outputForm === "SOP" ? "EQUATION SO FAR" : "F′ SO FAR (0-GROUPING)"}
+                  </p>
+                  <p
+                    className={`mt-1 break-words text-xl font-bold ${
+                      outputForm === "SOP" ? "text-[var(--lab-cyan)]" : "text-[var(--lab-pink)]"
+                    }`}
+                  >
+                    {outputForm === "SOP" ? "F = " : "F' = "}
+                    {safeStepIndex === -1 ? (
+                      "0"
+                    ) : (
+                      <ExprView
+                        expr={groupingSteps
+                          .slice(0, safeStepIndex + 1)
+                          .map((s) => s.term)
+                          .join(" + ")}
+                      />
+                    )}
+                  </p>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
-      {qm && (
+      {activeQm && (
         <>
           <h2 className="mt-6 text-xs tracking-[0.25em] text-[var(--lab-muted)]">
-            GROUPING STEPS (PAIRWISE COMBINE TRACE)
-          </h2>
-          {qm.steps.length === 0 ? (
-            <p className="mt-2 font-mono text-xs text-[var(--lab-muted)]">
-              No adjacent terms could be combined — every minterm is already its own prime
-              implicant.
-            </p>
-          ) : (
-            <ol className="mt-2 space-y-2">
-              {qm.steps.map((step) => (
-                <li
-                  key={step.round}
-                  className="rounded-md border border-[var(--lab-border)] bg-[oklch(0.12_0.03_265/.5)] px-3 py-2"
-                >
-                  <p className="text-[10px] tracking-[0.15em] text-[var(--lab-purple)]">
-                    ROUND {step.round} — combine terms differing in exactly one bit
-                  </p>
-                  <ul className="mt-1 space-y-0.5 font-mono text-xs text-[var(--lab-muted)]">
-                    {step.combined.map((c, i) => (
-                      <li key={i}>
-                        {c.from[0]} + {c.from[1]} →{" "}
-                        <span className="text-[var(--lab-cyan)]">{c.result}</span>{" "}
-                        <span className="text-[var(--lab-muted)]">
-                          (drops {parsed.vars[c.droppedVarIndex] ?? "?"})
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ol>
-          )}
-
-          <h2 className="mt-6 text-xs tracking-[0.25em] text-[var(--lab-muted)]">
-            PRIME IMPLICANTS
+            PRIME IMPLICANTS{outputForm === "POS" ? " (OF F′)" : ""}
           </h2>
           <div className="mt-2 flex flex-wrap gap-2">
-            {qm.primeImplicants.map((pi) => (
+            {activeQm.primeImplicants.map((pi) => (
               <span
                 key={pi.bits}
                 className={`rounded-md border px-2 py-1 font-mono text-xs ${
-                  qm.selectedImplicants.some((s) => s.bits === pi.bits)
+                  activeQm.selectedImplicants.some((s) => s.bits === pi.bits)
                     ? "border-[var(--lab-mint)] text-[var(--lab-mint)]"
                     : "border-[var(--lab-border)] text-[var(--lab-muted)]"
                 }`}
@@ -467,21 +556,42 @@ function KMapPage() {
           </div>
 
           <h2 className="mt-6 text-xs tracking-[0.25em] text-[var(--lab-muted)]">
-            ESSENTIAL PRIME IMPLICANTS
+            ESSENTIAL PRIME IMPLICANTS{outputForm === "POS" ? " (OF F′)" : ""}
           </h2>
           <p className="mt-2 font-mono text-xs text-[var(--lab-muted)]">
-            {qm.essentialPrimeImplicants.length > 0
-              ? qm.essentialPrimeImplicants
+            {activeQm.essentialPrimeImplicants.length > 0
+              ? activeQm.essentialPrimeImplicants
                   .map((t) => termToProduct(t.bits, parsed.vars))
                   .join(", ")
-              : "None — every minterm is covered by more than one prime implicant, so terms were chosen to cover the rest."}
+              : `None — every ${outputForm === "SOP" ? "minterm" : "0-term"} is covered by more than one prime implicant, so terms were chosen to cover the rest.`}
           </p>
 
           <div className="mt-4 rounded-md border border-[var(--lab-purple)] bg-[oklch(0.30_0.14_305/.20)] px-4 py-3 lab-glow-purple">
-            <p className="text-[10px] tracking-[0.2em] text-[var(--lab-muted)]">MINIMAL SOP</p>
-            <p className="mt-1 break-words text-xl font-bold text-[var(--lab-purple)]">
-              Y = <ExprView expr={finalExpr} />
+            <p className="text-[10px] tracking-[0.2em] text-[var(--lab-muted)]">
+              {outputForm === "SOP" ? "MINIMAL SOP" : "MINIMAL POS (VIA DEMORGAN)"}
             </p>
+            {outputForm === "SOP" ? (
+              <p className="mt-1 break-words text-xl font-bold text-[var(--lab-purple)]">
+                F({parsed.vars.join(", ")}) = <ExprView expr={finalExpr} />
+              </p>
+            ) : (
+              <div className="mt-1 space-y-2">
+                <p
+                  key={`fprime-${finalExprZero}`}
+                  className="break-words text-xl font-bold text-[var(--lab-pink)]"
+                  style={{ animation: "lab-appear 0.5s ease-out 1 both" }}
+                >
+                  F' = <ExprView expr={finalExprZero} />
+                </p>
+                <p
+                  key={`fpos-${posExpr}`}
+                  className="break-words text-xl font-bold text-[var(--lab-purple)]"
+                  style={{ animation: "lab-appear 0.5s ease-out 0.25s 1 both" }}
+                >
+                  F({parsed.vars.join(", ")}) = <ExprView expr={posExpr} />
+                </p>
+              </div>
+            )}
           </div>
         </>
       )}

@@ -20,9 +20,9 @@ export function LogicSimplifier() {
         <div className="flex items-center justify-between rounded-md border border-[var(--lab-cyan)] bg-[oklch(0.20_0.10_200/.25)] px-3 py-2 lab-glow-cyan">
           <span className="text-lg font-bold text-[var(--lab-cyan)]">A</span>
         </div>
-        <p className="pt-1 text-[10px] tracking-[0.2em] text-[var(--lab-muted)]">
+        {/* <p className="pt-1 text-[10px] tracking-[0.2em] text-[var(--lab-muted)]">
           ✓ 2 GATES · 6 TRANSISTORS SAVED
-        </p>
+        </p> */}
       </div>
       <Link to="/analysis/simplifier" className="lab-menu-btn mt-4 block w-full text-center">
         OPEN FULL SIMPLIFIER →

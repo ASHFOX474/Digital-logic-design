@@ -69,10 +69,10 @@ export function Tabulation() {
       
 
       {/* Result */}
-      <div className="mt-3 rounded-md border border-[var(--lab-warm)] bg-[oklch(0.25_0.10_60/.25)] px-3 py-2 text-center font-mono text-sm text-[var(--lab-warm)]"
+      {/* <div className="mt-3 rounded-md border border-[var(--lab-warm)] bg-[oklch(0.25_0.10_60/.25)] px-3 py-2 text-center font-mono text-sm text-[var(--lab-warm)]"
         style={{ boxShadow: "0 0 10px oklch(0.75 0.15 60/.4)" }}>
         <span style={{ animation: "lab-glow 3s ease-in-out infinite" }}>Y = AB' + BC</span>
-      </div>
+      </div> */}
 
       <Link to="/analysis/tabulation" className="lab-menu-btn mt-4 block w-full text-center">
         OPEN FULL TABULATION →
