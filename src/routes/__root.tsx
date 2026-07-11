@@ -78,21 +78,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Project Logic Lab — A Magical Digital Diorama" },
-      { name: "description", content: "An animated futuristic logic lab where friendly AI robots demonstrate digital circuits, K-Maps, and truth tables in a cozy magical diorama." },
+      { title: "DIGITAL LOGIC DESIGN" },
+      { name: "description", content: "Interactive digital logic design tool — K-Maps, truth tables, circuit visualizer, Quine-McCluskey minimization, and more." },
       { name: "author", content: "Logic Lab" },
       { property: "og:title", content: "Project Logic Lab" },
       { property: "og:description", content: "A cozy, magical animated diorama of a futuristic circuit playground." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
   shellComponent: RootShell,

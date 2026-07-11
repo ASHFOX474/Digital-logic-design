@@ -270,10 +270,11 @@ function KMapPage() {
                       </div>
                       {layout.colAxis.map((c) => {
                         const v = cellValue(layout, block.blockValue, r, c);
+                        const idx = cellIndex(layout, block.blockValue, r, c);
                         return (
                           <div
                             key={`${r}-${c}`}
-                            className={`flex items-center justify-center rounded-md border border-[var(--lab-border)] bg-[oklch(0.14_0.03_265/.6)] text-sm font-bold ${
+                            className={`relative flex items-center justify-center rounded-md border border-[var(--lab-border)] bg-[oklch(0.14_0.03_265/.6)] text-sm font-bold ${
                               v === "1"
                                 ? "text-[var(--lab-mint)]"
                                 : v === "X"
@@ -282,6 +283,9 @@ function KMapPage() {
                             }`}
                             style={{ height: CELL, width: CELL }}
                           >
+                            <span className="absolute left-1 top-0.5 font-mono text-[7px] text-[var(--lab-muted)] opacity-60">
+                              {idx}
+                            </span>
                             {v}
                           </div>
                         );

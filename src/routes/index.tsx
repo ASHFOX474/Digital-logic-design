@@ -4,7 +4,7 @@ import { Breadboard } from "@/components/lab/Breadboard";
 import { LogicSimplifier } from "@/components/lab/LogicSimplifier";
 import { TruthTable } from "@/components/lab/TruthTable";
 import { KMap } from "@/components/lab/KMap";
-import { Multimeter } from "@/components/lab/Multimeter";
+import { Tabulation } from "@/components/lab/Tabulation";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -32,7 +32,7 @@ function Index() {
           <Breadboard />
           <div className="flex flex-col gap-6">
             <KMap />
-            <Multimeter />
+            <Tabulation />
           </div>
         </div>
       </div>

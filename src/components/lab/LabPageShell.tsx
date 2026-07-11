@@ -22,7 +22,7 @@ export function LabPageShell({
       <div className="lab-circuit-bg absolute inset-0 opacity-60" aria-hidden />
       <div className="pointer-events-none absolute -left-32 top-20 h-96 w-96 rounded-full bg-[oklch(0.55_0.20_305/0.25)] blur-3xl" aria-hidden />
       <div className="pointer-events-none absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-[oklch(0.60_0.18_200/0.22)] blur-3xl" aria-hidden />
-      <div className="relative mx-auto max-w-5xl px-6 py-8">
+      <div className="relative mx-auto max-w-7xl px-6 py-8">
         <Header />
         <div className="lab-panel relative mt-6 overflow-hidden p-6">
           <div className="lab-scanline" aria-hidden />

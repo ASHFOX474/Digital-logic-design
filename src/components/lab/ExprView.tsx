@@ -1,7 +1,7 @@
 /**
  * Renders a textbook-notation Boolean string (from `toTextbook`, using a
- * postfix apostrophe for NOT, e.g. "A'B + AB'C") with real overlines instead
- * of apostrophes, matching how the expression would be written on paper.
+ * postfix apostrophe for NOT, e.g. "A'B + AB'C") with the apostrophe
+ * displayed as-is — matching the ' notation convention.
  */
 import type { ReactNode } from "react";
 
@@ -12,20 +12,12 @@ export function ExprView({ expr, className }: { expr: string; className?: string
   while (i < expr.length) {
     const c = expr[i];
     if (/[A-Za-z01]/.test(c)) {
-      // Grab a run: variable/const possibly followed by a group in parens, then check for a following apostrophe.
       let token = c;
       i++;
-      if (token.match(/[A-Za-z01]/) && expr[i] !== "'") {
-        nodes.push(<span key={key++}>{token}</span>);
-        continue;
-      }
       if (expr[i] === "'") {
         i++;
-        nodes.push(
-          <span key={key++} style={{ textDecoration: "overline", textDecorationThickness: "1.5px" }}>
-            {token}
-          </span>,
-        );
+        // Render as A' (apostrophe notation)
+        nodes.push(<span key={key++}>{token}'</span>);
         continue;
       }
       nodes.push(<span key={key++}>{token}</span>);
@@ -44,8 +36,8 @@ export function ExprView({ expr, className }: { expr: string; className?: string
       const negated = expr[j] === "'";
       nodes.push(
         negated ? (
-          <span key={key++} style={{ textDecoration: "overline", textDecorationThickness: "1.5px" }}>
-            (<ExprView expr={inner} />)
+          <span key={key++}>
+            (<ExprView expr={inner} />)'
           </span>
         ) : (
           <span key={key++}>

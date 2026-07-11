@@ -22,6 +22,7 @@ const ANALYSIS_TOOLS = [
   { to: "/analysis/sop", label: "Sum of Products (SOP)", hint: "Minterm expansion" },
   { to: "/analysis/pos", label: "Product of Sums (POS)", hint: "Maxterm expansion" },
   { to: "/analysis/nand-nor", label: "Universal Gate Converter", hint: "Rewrite using NAND/NOR only" },
+  { to: "/analysis/tabulation", label: "Tabulation Method", hint: "Quine-McCluskey step-by-step table" },
   { to: "/analysis/visualizer", label: "Circuit Visualizer", hint: "2D logic gate schematic" },
 ] as const;
 
