@@ -1,8 +1,10 @@
 /* ============================================================================
  * componentLibrary — static catalogue of every part the Virtual Lab trainer
- * kit can place: 14-pin gate ICs (with real pinouts + gate logic for the
- * simulator), arithmetic/decoder/mux ICs, sequential logic, registers, and
- * bench tools (wire spool, IC extractor).
+ * kit can place: gate ICs, arithmetic/decoder/mux ICs, sequential logic,
+ * registers, and bench tools (wire spool, IC extractor). Every non-tool part
+ * carries a real DIP pinout plus enough simulation metadata (`logic`) for the
+ * netlist solver in simulate.ts to actually drive it — combinational chips
+ * via `gates`/`combinational`, clocked chips via `sequential`.
  * ========================================================================== */
 
 export type PartShape = "chip" | "mux" | "ff" | "tool-wire" | "tool-extractor";
@@ -14,11 +16,37 @@ export interface GateSpec {
   fn: (inputs: boolean[]) => boolean;
 }
 
-/** Simulation metadata for a 14-pin logic-gate IC. */
+/** Reads a DIP pin's current electrical value (true = HIGH). */
+export type PinReader = (pin: number) => boolean;
+
+/** One independently-clocked storage element inside an IC (e.g. one half of a dual flip-flop,
+ *  or the 8-bit shift chain of a register). Its bits persist in the placed component's
+ *  `seqState` across renders and only change on a rising edge of `clockPin`. */
+export interface SequentialElement {
+  /** DIP pin whose rising edge (only counted when wired to the trainer kit's clock generator
+   *  tap) advances this element's state. */
+  clockPin: number;
+  /** How many bits of state this element owns. */
+  stateBits: number;
+  /** Computes the next state from the current state + live pin values, evaluated once per
+   *  rising clock edge. */
+  next: (state: boolean[], pin: PinReader) => boolean[];
+  /** Derives every pin this element drives from its current state; re-evaluated continuously
+   *  (not just on clock edges) so outputs like Q/Q̄ stay live between pulses. */
+  outputs: (state: boolean[]) => Record<number, boolean>;
+}
+
+/** Simulation metadata for a DIP IC. Combinational chips populate `gates` (simple per-gate
+ *  logic, e.g. quad 2-input gate packages) or `combinational` (whole-chip functions like
+ *  adders/decoders/muxes that read/drive many pins at once). Clocked chips populate
+ *  `sequential` instead. A chip only computes while its VCC/GND pins are actually wired to
+ *  the real power rails. */
 export interface IcLogic {
   vccPin: number;
   gndPin: number;
-  gates: GateSpec[];
+  gates?: GateSpec[];
+  combinational?: (pin: PinReader) => Record<number, boolean>;
+  sequential?: SequentialElement[];
 }
 
 export interface PartDef {
@@ -30,12 +58,13 @@ export interface PartDef {
   shape: PartShape;
   /** DIP pin count. */
   pins: number;
-  /** Footprint size in grid cells (w x h) used when snapping to the breadboard. */
+  /** Footprint size in grid cells (w x h) — informational only (shown in the sidebar);
+   *  actual on-board size is derived from `pins` for every DIP part. */
   footprint: { w: number; h: number };
   description: string;
   /** Pinout lines (left column top-to-bottom, right column bottom-to-top), DIP convention. */
   pinout?: { left: string[]; right: string[] };
-  /** Present only on 14-pin gate ICs the simulator understands. */
+  /** Present on every part the simulator understands (every IC except bench tools). */
   logic?: IcLogic;
 }
 
@@ -59,6 +88,22 @@ const QUAD2_GATES = (fn: (a: boolean[]) => boolean): GateSpec[] => [
   { inputs: [9, 10], output: 8, fn },
   { inputs: [12, 13], output: 11, fn },
 ];
+
+/** a XOR b XOR cin, plus the carry-out — the one full-adder building block every
+ *  ripple-carry adder (and the 7483) is made of. */
+function fullAdder(a: boolean, b: boolean, cin: boolean) {
+  const sum = a !== b !== cin;
+  const cout = (a && b) || (cin && (a !== b));
+  return { sum, cout };
+}
+
+/** J/K flip-flop next-state rule shared by both halves of the 7476. */
+function jkNext(q: boolean, j: boolean, k: boolean) {
+  if (j && k) return !q; // toggle
+  if (j) return true;
+  if (k) return false;
+  return q; // hold
+}
 
 export const COMPONENT_LIBRARY: PartCategory[] = [
   {
@@ -188,8 +233,30 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "arithmetic",
         shape: "chip",
         pins: 16,
-        footprint: { w: 6, h: 3 },
-        description: "Adds two 4-bit numbers with carry-in / carry-out.",
+        footprint: { w: 8, h: 2 },
+        description: "Adds two 4-bit numbers (A1-A4 + B1-B4) with carry-in (C0) / carry-out (C4). Pin 5 = VCC, Pin 12 = GND.",
+        pinout: {
+          left: ["A4", "S3", "A3", "B3", "VCC", "S2", "B2", "A2"],
+          right: ["B4", "S4", "C4", "C0", "B1", "A1", "S1", "GND"],
+        },
+        logic: {
+          vccPin: 5,
+          gndPin: 12,
+          combinational: (pin) => {
+            const a = [pin(10), pin(8), pin(3), pin(1)]; // A1..A4
+            const b = [pin(11), pin(7), pin(4), pin(16)]; // B1..B4
+            const sumPins = [9, 6, 2, 15]; // S1..S4
+            let carry = pin(13); // C0
+            const out: Record<number, boolean> = {};
+            for (let i = 0; i < 4; i++) {
+              const { sum, cout } = fullAdder(a[i], b[i], carry);
+              out[sumPins[i]] = sum;
+              carry = cout;
+            }
+            out[14] = carry; // C4
+            return out;
+          },
+        },
       },
     ],
   },
@@ -204,8 +271,26 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "decoders-mux",
         shape: "chip",
         pins: 24,
-        footprint: { w: 7, h: 4 },
-        description: "Decodes a 4-bit binary input into 1-of-16 active-low outputs.",
+        footprint: { w: 12, h: 2 },
+        description:
+          "Decodes a 4-bit binary input (A-D) into 1-of-16 active-low outputs (Y0-Y15) when both strobes (G1, G2) are low. Pin 24 = VCC, Pin 12 = GND.",
+        pinout: {
+          left: ["Y0", "Y1", "Y2", "Y3", "Y4", "Y5", "Y6", "Y7", "Y8", "Y9", "Y10", "GND"],
+          right: ["VCC", "Y15", "Y14", "Y13", "Y12", "Y11", "D", "C", "B", "A", "G2", "G1"],
+        },
+        logic: {
+          vccPin: 24,
+          gndPin: 12,
+          combinational: (pin) => {
+            const A = pin(23), B = pin(22), C = pin(21), D = pin(20);
+            const sel = (D ? 8 : 0) + (C ? 4 : 0) + (B ? 2 : 0) + (A ? 1 : 0);
+            const enabled = !pin(18) && !pin(19); // G1, G2 active low
+            const yPins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17];
+            const out: Record<number, boolean> = {};
+            yPins.forEach((p, i) => (out[p] = !(enabled && i === sel)));
+            return out;
+          },
+        },
       },
       {
         id: "ic-7447",
@@ -214,8 +299,48 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "decoders-mux",
         shape: "chip",
         pins: 16,
-        footprint: { w: 6, h: 3 },
-        description: "Drives a common-anode 7-segment display from a BCD input.",
+        footprint: { w: 8, h: 2 },
+        description:
+          "Drives a common-anode 7-segment display (active-low a-g) from a BCD input (A-D). LT = lamp test, BI/RBO = blanking, RBI = ripple blank. Pin 16 = VCC, Pin 8 = GND.",
+        pinout: {
+          left: ["B", "C", "LT", "BI/RBO", "RBI", "D", "A", "GND"],
+          right: ["VCC", "f", "g", "a", "b", "c", "d", "e"],
+        },
+        logic: {
+          vccPin: 16,
+          gndPin: 8,
+          combinational: (pin) => {
+            const A = pin(7), B = pin(1), C = pin(2), D = pin(6);
+            const val = (D ? 8 : 0) + (C ? 4 : 0) + (B ? 2 : 0) + (A ? 1 : 0);
+            const LT = pin(3);
+            const BI = pin(4);
+            const RBI = pin(5);
+            // Active-low segment patterns [a,b,c,d,e,f,g] for digits 0-9 (1 = segment off).
+            const DIGITS: Record<number, number[]> = {
+              0: [0, 0, 0, 0, 0, 0, 1],
+              1: [1, 0, 0, 1, 1, 1, 1],
+              2: [0, 0, 1, 0, 0, 1, 0],
+              3: [0, 0, 0, 0, 1, 1, 0],
+              4: [1, 0, 0, 1, 1, 0, 0],
+              5: [0, 1, 0, 0, 1, 0, 0],
+              6: [0, 1, 0, 0, 0, 0, 0],
+              7: [0, 0, 0, 1, 1, 1, 1],
+              8: [0, 0, 0, 0, 0, 0, 0],
+              9: [0, 0, 0, 0, 1, 0, 0],
+            };
+            const ALL_OFF = [1, 1, 1, 1, 1, 1, 1];
+            const ALL_ON = [0, 0, 0, 0, 0, 0, 0];
+            let segs: number[];
+            if (!LT) segs = ALL_ON; // lamp test overrides everything
+            else if (!BI) segs = ALL_OFF; // unconditional blank
+            else if (val === 0 && !RBI) segs = ALL_OFF; // ripple-blank a leading/trailing zero
+            else segs = DIGITS[val] ?? ALL_OFF; // 10-15: undefined BCD, blank
+            const segPins = [13, 12, 11, 10, 9, 15, 14]; // a,b,c,d,e,f,g
+            const out: Record<number, boolean> = {};
+            segPins.forEach((p, i) => (out[p] = !!segs[i]));
+            return out;
+          },
+        },
       },
       {
         id: "mux-4x1",
@@ -224,8 +349,26 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "decoders-mux",
         shape: "mux",
         pins: 16,
-        footprint: { w: 4, h: 3 },
-        description: "Selects 1 of 4 inputs using 2 select lines.",
+        footprint: { w: 8, h: 2 },
+        description:
+          "Dual 4-to-1 multiplexer sharing select lines A/B; each half has its own active-low strobe (1G, 2G). Pin 16 = VCC, Pin 8 = GND.",
+        pinout: {
+          left: ["1G", "B", "1C3", "1C2", "1C1", "1C0", "1Y", "GND"],
+          right: ["VCC", "A", "2G", "2C3", "2C2", "2C1", "2C0", "2Y"],
+        },
+        logic: {
+          vccPin: 16,
+          gndPin: 8,
+          combinational: (pin) => {
+            const A = pin(14), B = pin(2);
+            const sel = (B ? 2 : 0) + (A ? 1 : 0);
+            const c1 = [pin(6), pin(5), pin(4), pin(3)]; // 1C0..1C3
+            const c2 = [pin(10), pin(11), pin(12), pin(13)]; // 2C0..2C3
+            const g1 = !pin(1);
+            const g2 = !pin(15);
+            return { 7: g1 && c1[sel], 9: g2 && c2[sel] };
+          },
+        },
       },
       {
         id: "mux-8x1",
@@ -234,8 +377,24 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "decoders-mux",
         shape: "mux",
         pins: 16,
-        footprint: { w: 4, h: 4 },
-        description: "Selects 1 of 8 inputs using 3 select lines.",
+        footprint: { w: 8, h: 2 },
+        description:
+          "Selects 1 of 8 inputs (D0-D7) using select lines C/B/A, gated by an active-low strobe. Y = selected input, W = its complement. Pin 16 = VCC, Pin 8 = GND.",
+        pinout: {
+          left: ["D3", "D2", "D1", "D0", "Y", "W", "STROBE", "GND"],
+          right: ["VCC", "D4", "D5", "D6", "D7", "C", "B", "A"],
+        },
+        logic: {
+          vccPin: 16,
+          gndPin: 8,
+          combinational: (pin) => {
+            const sel = (pin(9) ? 4 : 0) + (pin(10) ? 2 : 0) + (pin(11) ? 1 : 0); // C,B,A
+            const d = [pin(4), pin(3), pin(2), pin(1), pin(15), pin(14), pin(13), pin(12)]; // D0..D7
+            const enabled = !pin(7); // STROBE active low
+            const y = enabled && d[sel];
+            return { 5: y, 6: !y };
+          },
+        },
       },
       {
         id: "mux-16x1",
@@ -244,8 +403,24 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "decoders-mux",
         shape: "mux",
         pins: 24,
-        footprint: { w: 5, h: 5 },
-        description: "Selects 1 of 16 inputs using 4 select lines.",
+        footprint: { w: 12, h: 2 },
+        description:
+          "Selects 1 of 16 inputs (E0-E15) using select lines D/C/B/A, gated by an active-low strobe. Output W is the complement of the selected input. Pin 24 = VCC, Pin 12 = GND.",
+        pinout: {
+          left: ["E7", "E6", "E5", "E4", "E3", "E2", "E1", "E0", "STROBE", "W", "D", "GND"],
+          right: ["VCC", "E8", "E9", "E10", "E11", "E12", "E13", "E14", "E15", "C", "B", "A"],
+        },
+        logic: {
+          vccPin: 24,
+          gndPin: 12,
+          combinational: (pin) => {
+            const sel = (pin(11) ? 8 : 0) + (pin(13) ? 4 : 0) + (pin(14) ? 2 : 0) + (pin(15) ? 1 : 0); // D,C,B,A
+            const ePins = [8, 7, 6, 5, 4, 3, 2, 1, 23, 22, 21, 20, 19, 18, 17, 16]; // E0..E15
+            const enabled = !pin(9); // STROBE active low
+            const w = enabled ? !pin(ePins[sel]) : true;
+            return { 10: w };
+          },
+        },
       },
     ],
   },
@@ -260,8 +435,43 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "sequential",
         shape: "ff",
         pins: 16,
-        footprint: { w: 3, h: 3 },
-        description: "No invalid state; toggles when J=K=1.",
+        footprint: { w: 8, h: 2 },
+        description:
+          "Dual JK flip-flop. No invalid state; toggles when J=K=1. Wire CLK1/CLK2 to the CLK TAP to clock each half. PR/CLR are active-low, applied at the next clock edge. Pin 5 = VCC, Pin 13 = GND.",
+        pinout: {
+          left: ["1CLK", "1PR", "1CLR", "1J", "VCC", "2CLK", "2J", "2PR"],
+          right: ["1K", "1Q", "1Q\u0305", "GND", "2CLR", "2K", "2Q", "2Q\u0305"],
+        },
+        logic: {
+          vccPin: 5,
+          gndPin: 13,
+          sequential: [
+            {
+              clockPin: 1,
+              stateBits: 1,
+              next: (state, pin) => {
+                const clr = !pin(2);
+                const pr = !pin(3);
+                if (clr) return [false];
+                if (pr) return [true];
+                return [jkNext(state[0], pin(4), pin(14))];
+              },
+              outputs: (state) => ({ 15: state[0], 16: !state[0] }),
+            },
+            {
+              clockPin: 6,
+              stateBits: 1,
+              next: (state, pin) => {
+                const clr = !pin(9);
+                const pr = !pin(8);
+                if (clr) return [false];
+                if (pr) return [true];
+                return [jkNext(state[0], pin(7), pin(10))];
+              },
+              outputs: (state) => ({ 11: state[0], 12: !state[0] }),
+            },
+          ],
+        },
       },
       {
         id: "ff-d",
@@ -270,8 +480,43 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "sequential",
         shape: "ff",
         pins: 14,
-        footprint: { w: 3, h: 3 },
-        description: "Captures the D input on the clock edge.",
+        footprint: { w: 7, h: 2 },
+        description:
+          "Dual D flip-flop. Captures D on the clock edge — wire CLK1/CLK2 to the CLK TAP. PR/CLR are active-low, applied at the next clock edge. Pin 14 = VCC, Pin 7 = GND.",
+        pinout: {
+          left: ["1CLR", "1D", "1CLK", "1PR", "1Q", "1Q\u0305", "GND"],
+          right: ["VCC", "2Q\u0305", "2Q", "2PR", "2CLK", "2D", "2CLR"],
+        },
+        logic: {
+          vccPin: 14,
+          gndPin: 7,
+          sequential: [
+            {
+              clockPin: 3,
+              stateBits: 1,
+              next: (state, pin) => {
+                const clr = !pin(1);
+                const pr = !pin(4);
+                if (clr) return [false];
+                if (pr) return [true];
+                return [pin(2)];
+              },
+              outputs: (state) => ({ 5: state[0], 6: !state[0] }),
+            },
+            {
+              clockPin: 11,
+              stateBits: 1,
+              next: (state, pin) => {
+                const clr = !pin(13);
+                const pr = !pin(10);
+                if (clr) return [false];
+                if (pr) return [true];
+                return [pin(12)];
+              },
+              outputs: (state) => ({ 9: state[0], 8: !state[0] }),
+            },
+          ],
+        },
       },
     ],
   },
@@ -286,8 +531,28 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "registers",
         shape: "chip",
         pins: 14,
-        footprint: { w: 5, h: 3 },
-        description: "Serial-in, serial-out 8-bit shift register.",
+        footprint: { w: 7, h: 2 },
+        description:
+          "Serial-in, serial-out 8-bit shift register — only the final stage (Q) is exposed. Data in = A AND B, gated shift on each CLK rising edge (wire CLK to the CLK TAP). Pin 5 = VCC, Pin 10 = GND.",
+        pinout: {
+          left: ["NC", "NC", "NC", "NC", "VCC", "NC", "NC"],
+          right: ["NC", "CLK", "GND", "E", "D", "Q", "Q\u0305"],
+        },
+        logic: {
+          vccPin: 5,
+          gndPin: 10,
+          sequential: [
+            {
+              clockPin: 9,
+              stateBits: 8,
+              next: (state, pin) => {
+                const din = pin(12) && pin(11); // D AND E
+                return [din, ...state.slice(0, 7)];
+              },
+              outputs: (state) => ({ 13: state[7], 14: !state[7] }),
+            },
+          ],
+        },
       },
       {
         id: "ic-74164",
@@ -296,8 +561,38 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         category: "registers",
         shape: "chip",
         pins: 14,
-        footprint: { w: 5, h: 3 },
-        description: "Serial-in, parallel-out 8-bit shift register.",
+        footprint: { w: 7, h: 2 },
+        description:
+          "Serial-in, parallel-out 8-bit shift register (QA-QH). Data in = A AND B, shifts on each CLK rising edge (wire CLK to the CLK TAP); CLR is active-low, applied at the next clock edge. Pin 14 = VCC, Pin 7 = GND.",
+        pinout: {
+          left: ["A", "B", "QA", "QB", "QC", "QD", "GND"],
+          right: ["VCC", "QH", "QG", "QF", "QE", "CLR", "CLK"],
+        },
+        logic: {
+          vccPin: 14,
+          gndPin: 7,
+          sequential: [
+            {
+              clockPin: 13,
+              stateBits: 8,
+              next: (state, pin) => {
+                if (!pin(12)) return Array(8).fill(false); // CLR active low, async on real hw
+                const din = pin(1) && pin(2); // A AND B
+                return [din, ...state.slice(0, 7)];
+              },
+              outputs: (state) => ({
+                3: state[0],
+                4: state[1],
+                5: state[2],
+                6: state[3],
+                8: state[4],
+                9: state[5],
+                10: state[6],
+                11: state[7],
+              }),
+            },
+          ],
+        },
       },
     ],
   },

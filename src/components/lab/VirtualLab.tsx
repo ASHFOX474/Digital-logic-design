@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "./Header";
 import { ComponentSidebar, type ToolId } from "./virtual-lab/ComponentSidebar";
 import { TrainerKit, type PlacedComponent, type Wire, type WireEndpoint } from "./virtual-lab/TrainerKit";
 import type { WireColorId } from "./virtual-lab/componentLibrary";
-import { simulate } from "./virtual-lab/simulate";
+import { simulate, advanceSequential, type SeqState } from "./virtual-lab/simulate";
+import { genId } from "@/lib/utils";
 
 /* ============================================================================
  * VirtualLab — "Project Logic Lab" digital trainer kit.
@@ -34,13 +35,34 @@ export function VirtualLab() {
   const [inputs, setInputs] = useState<boolean[]>(Array(8).fill(false));
   const [clockOn, setClockOn] = useState(false);
 
+  // Persisted flip-flop / shift-register state, keyed by placed-component id. Only changes when
+  // `clockOn` rises from false to true (see the effect below) — that's what makes clocked ICs
+  // (D/JK flip-flops, shift registers) behave like real edge-triggered parts instead of
+  // recomputing from scratch on every render.
+  const [seqState, setSeqState] = useState<SeqState>({});
+  const wasClockOn = useRef(false);
+
+  // Part armed for tap-to-place — the touch-friendly alternative to native HTML5 drag-and-drop,
+  // which doesn't fire reliably on mobile/tablet browsers. Tap a part in the sidebar to arm it,
+  // then tap anywhere on the board to place it there.
+  const [armedPartId, setArmedPartId] = useState<string | null>(null);
+
   const outputs = useMemo(
-    () => simulate(placedComponents, wires, inputs, clockOn),
-    [placedComponents, wires, inputs, clockOn],
+    () => simulate(placedComponents, wires, inputs, clockOn, seqState),
+    [placedComponents, wires, inputs, clockOn, seqState],
   );
 
+  // Advance every sequential IC exactly once per clock rising edge.
+  useEffect(() => {
+    if (clockOn && !wasClockOn.current) {
+      setSeqState((prev) => advanceSequential(placedComponents, wires, inputs, prev));
+    }
+    wasClockOn.current = clockOn;
+  }, [clockOn, placedComponents, wires, inputs]);
+
   const handleDropPart = (defId: string, x: number, y: number) => {
-    setPlacedComponents((prev) => [...prev, { id: crypto.randomUUID(), defId, x, y }]);
+    setPlacedComponents((prev) => [...prev, { id: genId(), defId, x, y }]);
+    setArmedPartId(null);
   };
 
   const handleMoveComponent = (id: string, x: number, y: number) => {
@@ -49,6 +71,12 @@ export function VirtualLab() {
 
   const handleRemoveComponent = (id: string) => {
     setPlacedComponents((prev) => prev.filter((c) => c.id !== id));
+    setSeqState((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   const handleRemoveWire = (id: string) => {
@@ -76,12 +104,13 @@ export function VirtualLab() {
       setWireDraft(null);
       return;
     }
-    setWires((prev) => [...prev, { id: crypto.randomUUID(), from: wireDraft, to: { key, x, y }, color: wireColor }]);
+    setWires((prev) => [...prev, { id: genId(), from: wireDraft, to: { key, x, y }, color: wireColor }]);
     setWireDraft(null);
   };
 
   const handleSelectTool = (tool: ToolId) => {
     setActiveTool(tool);
+    setArmedPartId(null);
     setWireDraft(null);
     setSelectedWireId(null);
     setEndpointEdit(null);
@@ -107,6 +136,7 @@ export function VirtualLab() {
       setWireDraft(null);
       setSelectedWireId(null);
       setEndpointEdit(null);
+      setArmedPartId(null);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -120,12 +150,15 @@ export function VirtualLab() {
     setPlacedComponents([]);
     setWires([]);
     setActiveTool(null);
+    setArmedPartId(null);
     setWireColor("cyan");
     setWireDraft(null);
     setSelectedWireId(null);
     setEndpointEdit(null);
     setInputs(Array(8).fill(false));
     setClockOn(false);
+    setSeqState({});
+    wasClockOn.current = false;
   };
 
   return (
@@ -134,21 +167,24 @@ export function VirtualLab() {
       <div className="pointer-events-none absolute -left-32 top-20 h-96 w-96 rounded-full bg-[oklch(0.55_0.20_305/0.25)] blur-3xl" aria-hidden />
       <div className="pointer-events-none absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-[oklch(0.60_0.18_200/0.22)] blur-3xl" aria-hidden />
 
-      <div className="relative mx-auto flex min-h-screen max-w-[1800px] flex-col px-6 py-6">
+      <div className="relative mx-auto flex min-h-screen max-w-[1960px] flex-col px-3 py-4 sm:px-6 sm:py-6">
         <Header />
 
-        <div className="mt-6 grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
-          <div className="lg:h-[calc(100vh-180px)]">
+        <div className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-4 sm:mt-6 sm:gap-6 md:grid-cols-[260px_1fr] lg:grid-cols-[300px_1fr]">
+          <div className="h-[380px] md:h-[calc(100vh-170px)] lg:h-[calc(100vh-140px)]">
             <ComponentSidebar
               activeTool={activeTool}
               onSelectTool={handleSelectTool}
               wireColor={wireColor}
               onWireColorChange={setWireColor}
+              armedPartId={armedPartId}
+              onArmPart={setArmedPartId}
             />
           </div>
 
-          <div className="lg:h-[calc(100vh-180px)]">
+          <div className="h-[75vh] min-h-[460px] md:h-[calc(100vh-170px)] lg:h-[calc(100vh-140px)]">
             <TrainerKit
+              armedPartId={armedPartId}
               placedComponents={placedComponents}
               wires={wires}
               activeTool={activeTool}

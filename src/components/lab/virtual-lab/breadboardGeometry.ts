@@ -57,22 +57,30 @@ export function botNode(c: number) {
   return `mb${c}`;
 }
 
-/** Given a dropped 14-pin IC's centre x, snap to the left-most straddled column (0..COLS-7). */
-export function icColumn(compX: number) {
-  const c0 = Math.round((compX - MATRIX_X - (6 * HOLE) / 2) / HOLE);
-  return Math.min(Math.max(c0, 0), COLS - 7);
+/**
+ * Given a dropped DIP IC's centre x and its total pin count, snap to the
+ * left-most straddled column. Every DIP package (14/16/24-pin, ...) straddles
+ * the centre gutter with pinCount/2 pins down each side, so it spans
+ * pinCount/2 columns — a 14-pin IC spans 7 columns exactly like before.
+ */
+export function icColumn(compX: number, pinCount: number) {
+  const half = pinCount / 2;
+  const c0 = Math.round((compX - MATRIX_X - ((half - 1) * HOLE) / 2) / HOLE);
+  return Math.min(Math.max(c0, 0), COLS - half);
 }
 
 /**
- * Maps a 1-14 DIP pin number to the breadboard node it lands on when the IC
- * straddles the gutter at left column c0: pins 1-7 run left-to-right along
- * the bottom block's row nearest the gutter (row 'f'); pins 8-14 run
- * right-to-left back along the top block's row nearest the gutter (row 'e').
+ * Maps a 1..pinCount DIP pin number to the breadboard node it lands on when
+ * the IC straddles the gutter at left column c0: pins 1..half run
+ * left-to-right along the bottom block's row nearest the gutter; pins
+ * half+1..pinCount run right-to-left back along the top block's row nearest
+ * the gutter — standard DIP numbering, generalized from the fixed 14-pin
+ * (half=7) case to any even pin count (16, 24, ...).
  */
-export function pinToNode(pin: number, c0: number): string {
-  if (pin >= 1 && pin <= 7) return botNode(c0 + (pin - 1));
-  const idx = pin - 8; // 0..6
-  return topNode(c0 + (6 - idx));
+export function pinToNode(pin: number, c0: number, pinCount: number): string {
+  const half = pinCount / 2;
+  if (pin >= 1 && pin <= half) return botNode(c0 + (pin - 1));
+  return topNode(c0 + 2 * half - pin);
 }
 
 export const VCC_NODE = "VCC";

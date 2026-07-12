@@ -21,6 +21,13 @@ const WIRE: Record<Letter, { stroke: string; glow: string }> = {
 const IY = [72, 132, 192, 252];
 const IC1 = 200, IC2 = 320, IC3 = 440;
 const OUT_X = 552, OUT_Y = 160;
+// The SVG wiring diagram is drawn on a fixed 600x300 canvas (viewBox below). The diorama's
+// outer container is locked to that same 2:1 aspect ratio (see the `aspect-[2/1]` className
+// further down), so converting every overlay element's position to a percentage of this canvas
+// keeps switches/chips/LED lined up with the wires they connect to at any screen width —
+// including narrow phone screens, where the whole diorama simply scales down uniformly.
+const CANVAS_W = 600;
+const CANVAS_H = 300;
 
 export function Breadboard() {
   const [inputs, setInputs] = useState<[boolean, boolean, boolean, boolean]>([true, true, false, false]);
@@ -115,14 +122,14 @@ export function Breadboard() {
       </div>
 
       <div
-        className="relative mt-4 h-[300px] rounded-2xl border border-[var(--lab-border)]"
+        className="relative mt-4 aspect-[2/1] w-full rounded-2xl border border-[var(--lab-border)]"
         style={{
           background:
             "repeating-linear-gradient(0deg, oklch(0.13 0.03 260) 0 22px, oklch(0.16 0.03 260) 22px 24px)," +
             "linear-gradient(180deg, oklch(0.19 0.04 265), oklch(0.11 0.03 260))",
         }}
       >
-        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 600 300" preserveAspectRatio="none">
+        <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} preserveAspectRatio="none">
           {LETTERS.map((L, i) => {
             const on = inputs[i];
             return (
@@ -166,7 +173,11 @@ export function Breadboard() {
         </svg>
 
         {LETTERS.map((L, i) => (
-          <div key={L} className="absolute flex items-center gap-2" style={{ left: 12, top: IY[i], transform: "translateY(-50%)" }}>
+          <div
+            key={L}
+            className="absolute flex items-center gap-2"
+            style={{ left: `${(12 / CANVAS_W) * 100}%`, top: `${(IY[i] / CANVAS_H) * 100}%`, transform: "translateY(-50%)" }}
+          >
             <span className="w-3 font-mono text-sm font-bold" style={{ color: WIRE[L].stroke }}>
               {L}
             </span>
@@ -188,13 +199,19 @@ export function Breadboard() {
           </div>
         ))}
 
-        <div className="absolute left-1/2 top-40 flex -translate-x-1/2 -translate-y-1/2 gap-6">
+        <div
+          className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-6"
+          style={{ top: `${(160 / CANVAS_H) * 100}%` }}
+        >
           <MiniChip label="74LS08" />
           <MiniChip label="74LS32" />
           <MiniChip label="74LS86" />
         </div>
 
-        <div className="absolute right-4 flex flex-col items-center gap-2" style={{ top: OUT_Y + 10, transform: "translateY(-50%)" }}>
+        <div
+          className="absolute right-4 flex flex-col items-center gap-2"
+          style={{ top: `${((OUT_Y + 10) / CANVAS_H) * 100}%`, transform: "translateY(-50%)" }}
+        >
           <div
             className="h-12 w-12 rounded-full border-2"
             style={{

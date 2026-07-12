@@ -37,30 +37,32 @@ function TruthTablePage() {
       )}
 
       {result.table && (
-        <table className="mt-5 w-full border-separate border-spacing-y-1 text-center font-mono text-sm">
-          <thead>
-            <tr className="text-[10px] tracking-[0.3em] text-[var(--lab-muted)]">
-              {result.table.vars.map((v) => (
-                <th key={v}>{v}</th>
-              ))}
-              <th>Y</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.table.rows.map((row) => (
-              <tr key={row.index} className="lab-truth-row">
-                {row.bits.map((b, i) => (
-                  <td key={i} className={i === 0 ? "rounded-l-md py-1.5" : "py-1.5"}>
-                    {b ? 1 : 0}
-                  </td>
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[320px] border-separate border-spacing-y-1 text-center font-mono text-sm">
+            <thead>
+              <tr className="text-[10px] tracking-[0.3em] text-[var(--lab-muted)]">
+                {result.table.vars.map((v) => (
+                  <th key={v}>{v}</th>
                 ))}
-                <td className={`rounded-r-md font-bold ${row.output ? "text-[var(--lab-mint)]" : "text-[var(--lab-muted)]"}`}>
-                  {row.output ? 1 : 0}
-                </td>
+                <th>Y</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {result.table.rows.map((row) => (
+                <tr key={row.index} className="lab-truth-row">
+                  {row.bits.map((b, i) => (
+                    <td key={i} className={i === 0 ? "rounded-l-md py-1.5" : "py-1.5"}>
+                      {b ? 1 : 0}
+                    </td>
+                  ))}
+                  <td className={`rounded-r-md font-bold ${row.output ? "text-[var(--lab-mint)]" : "text-[var(--lab-muted)]"}`}>
+                    {row.output ? 1 : 0}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </LabPageShell>
   );

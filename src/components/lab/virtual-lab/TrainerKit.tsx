@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState, type DragEvent, type MouseEvent, type PointerEvent } from "react";
 import { ALL_PARTS, WIRE_COLORS, type WireColorId } from "./componentLibrary";
-import { PartIcon } from "./PartIcon";
 import type { ToolId } from "./ComponentSidebar";
 import {
   HOLE,
@@ -66,7 +65,10 @@ export interface Wire {
 
 const GRID = 20;
 const VIEW = { w: 1050, h: 800 };
-const FREE_AREA = { x: 20, y: 560, w: VIEW.w - 40, h: 0 }; // fallback drop zone for non-gate ICs
+// Clamp bounds for where a part can be dropped/tapped onto the board. Every part renders as a
+// DIP IC straddling the centre gutter, so only the x clamp actually matters for placement — y is
+// kept generic in case future non-DIP parts need it.
+const DROP_BOUNDS = { x: 20, y: 560, w: VIEW.w - 40, h: 0 };
 const HOLE_HIT_R = 12; // generous invisible hit-radius so tiny breadboard holes are easy to tap on touch screens
 /** Perpendicular spacing applied between wires that share the exact same pair of holes. */
 const OVERLAP_OFFSET = 9;
@@ -174,7 +176,7 @@ export function TrainerKit({
   const handleDragOver = (e: DragEvent) => e.preventDefault();
 
   const clampToBoard = (x: number, y: number) => ({
-    x: Math.min(Math.max(snap(x), FREE_AREA.x), FREE_AREA.x + FREE_AREA.w),
+    x: Math.min(Math.max(snap(x), DROP_BOUNDS.x), DROP_BOUNDS.x + DROP_BOUNDS.w),
     y: Math.min(Math.max(snap(y), 40), VIEW.h - 40),
   });
 
@@ -308,24 +310,26 @@ export function TrainerKit({
   return (
     <div className="lab-panel relative flex h-full w-full flex-col overflow-hidden">
       <div className="lab-scanline" aria-hidden />
-      <div className="flex items-center justify-between border-b border-[var(--lab-border)] px-5 py-3">
+      <div className="flex flex-col gap-2 border-b border-[var(--lab-border)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5">
         <div>
           <p className="text-[10px] tracking-[0.35em] text-[var(--lab-muted)]">◆ TRAINER KIT</p>
           <h1 className="lab-title mt-0.5 text-lg font-bold tracking-[0.12em]">VIRTUAL LAB</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1 font-mono text-[10px] tracking-[0.2em] text-[var(--lab-muted)]">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <span className="flex min-w-0 items-center gap-1 font-mono text-[10px] tracking-[0.2em] text-[var(--lab-muted)]">
             <span
-              className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--lab-mint)]"
+              className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--lab-mint)]"
               style={{ animation: "lab-pulse 1.2s ease-in-out infinite" }}
             />
-            {armedPartId
-              ? `TAP THE BOARD TO PLACE ${ALL_PARTS[armedPartId]?.code ?? "PART"}`
-              : endpointEdit
-                ? "DROP THIS WIRE END ON A NEW HOLE"
-                : selectedWireId
-                  ? "WIRE SELECTED · drag a dot to re-route · use the popup to recolor/delete"
-                  : `${placedComponents.length} PARTS · ${wires.length} WIRES`}
+            <span className="break-words">
+              {armedPartId
+                ? `TAP THE BOARD TO PLACE ${ALL_PARTS[armedPartId]?.code ?? "PART"}`
+                : endpointEdit
+                  ? "DROP THIS WIRE END ON A NEW HOLE"
+                  : selectedWireId
+                    ? "WIRE SELECTED · drag a dot to re-route · use the popup to recolor/delete"
+                    : `${placedComponents.length} PARTS · ${wires.length} WIRES`}
+            </span>
           </span>
           <button
             type="button"
@@ -344,11 +348,11 @@ export function TrainerKit({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div className="min-h-0 flex-1 overflow-auto p-2 sm:p-4" style={{ touchAction: "pan-x pan-y pinch-zoom" }}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${VIEW.w} ${VIEW.h}`}
-          className="h-auto min-w-[640px] sm:min-w-[1000px] w-full select-none"
+          className="h-auto min-w-[900px] w-full select-none"
           style={{ cursor: armedPartId ? "copy" : holesActive ? "crosshair" : "default" }}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
@@ -373,11 +377,11 @@ export function TrainerKit({
           />
 
           {/* ---------- Output display: LEDs (top) ---------- */}
-          <text x={MATRIX_X - 10} y={70} fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="2" fill="var(--lab-muted)">
+          <text x={MATRIX_X - 10} y={90} fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="2" fill="var(--lab-muted)">
             OUTPUT DISPLAY
           </text>
           {Array.from({ length: 8 }, (_, i) => tapX(i)).map((x, i) => (
-            <g key={`led-${i}`} transform={`translate(${x}, 105)`}>
+            <g key={`led-${i}`} transform={`translate(${x}, 125)`}>
               <circle r="9" fill="oklch(0.12 0.02 260)" stroke="var(--lab-border)" />
               <circle
                 r="6"
@@ -620,62 +624,18 @@ export function TrainerKit({
           {placedComponents.map((comp) => {
             const def = ALL_PARTS[comp.defId];
             if (!def) return null;
-            if (def.logic) {
-              const c0 = icColumn(comp.x);
-              const left = colX(c0) - HOLE / 2;
-              const width = 6 * HOLE + HOLE;
-              const top = topRowY(4) - HOLE / 2;
-              const height = botRowY(0) - topRowY(4) + HOLE;
-              return (
-                <g
-                  key={comp.id}
-                  onPointerDown={(e) => startDragComponent(e, comp)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (activeTool === "extractor") onRemoveComponent(comp.id);
-                  }}
-                  style={{ cursor: activeTool === "extractor" ? "not-allowed" : "grab", touchAction: "none" }}
-                >
-                  <rect
-                    x={left}
-                    y={top}
-                    width={width}
-                    height={height}
-                    rx="4"
-                    fill="oklch(0.16 0.02 260 / 0.96)"
-                    stroke="var(--lab-cyan)"
-                    strokeWidth="1.2"
-                    style={{ filter: "drop-shadow(0 0 6px oklch(0.86 0.16 200 / 0.4))" }}
-                  />
-                  <circle cx={left + 8} cy={top + 8} r="2.5" fill="var(--lab-cyan)" />
-                  <text
-                    x={left + width / 2}
-                    y={top + height / 2 + 4}
-                    textAnchor="middle"
-                    fontFamily="ui-monospace, monospace"
-                    fontSize="11"
-                    fontWeight="bold"
-                    fill="var(--lab-ink)"
-                  >
-                    {def.code}
-                  </text>
-                  {/* pin bumps */}
-                  {Array.from({ length: 7 }, (_, i) => (
-                    <rect key={`pt${i}`} x={colX(c0 + i) - 2} y={top - 4} width={4} height={4} fill="oklch(0.75 0.03 260)" />
-                  ))}
-                  {Array.from({ length: 7 }, (_, i) => (
-                    <rect key={`pb${i}`} x={colX(c0 + i) - 2} y={top + height} width={4} height={4} fill="oklch(0.75 0.03 260)" />
-                  ))}
-                </g>
-              );
-            }
-
-            const w = Math.max(def.footprint.w * GRID, 44);
-            const h = Math.max(def.footprint.h * GRID, 30);
+            // Every part the simulator understands (gate ICs, arithmetic/decoder/mux ICs,
+            // flip-flops, registers) is a real DIP package: it straddles the centre gutter
+            // with pins/2 pins down each side, exactly like a chip on a physical breadboard.
+            const half = def.pins / 2;
+            const c0 = icColumn(comp.x, def.pins);
+            const left = colX(c0) - HOLE / 2;
+            const width = (half - 1) * HOLE + HOLE;
+            const top = topRowY(4) - HOLE / 2;
+            const height = botRowY(0) - topRowY(4) + HOLE;
             return (
               <g
                 key={comp.id}
-                transform={`translate(${comp.x - w / 2}, ${comp.y - h / 2})`}
                 onPointerDown={(e) => startDragComponent(e, comp)}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -683,21 +643,40 @@ export function TrainerKit({
                 }}
                 style={{ cursor: activeTool === "extractor" ? "not-allowed" : "grab", touchAction: "none" }}
               >
+                <title>
+                  {def.code} — {def.label}
+                  {def.description ? `: ${def.description}` : ""}
+                </title>
                 <rect
-                  width={w}
-                  height={h}
+                  x={left}
+                  y={top}
+                  width={width}
+                  height={height}
                   rx="4"
-                  fill="oklch(0.16 0.03 260 / 0.95)"
+                  fill="oklch(0.16 0.02 260 / 0.96)"
                   stroke="var(--lab-cyan)"
-                  strokeWidth="1"
-                  style={{ filter: "drop-shadow(0 0 6px oklch(0.86 0.16 200 / 0.35))" }}
+                  strokeWidth="1.2"
+                  style={{ filter: "drop-shadow(0 0 6px oklch(0.86 0.16 200 / 0.4))" }}
                 />
-                <foreignObject x={4} y={2} width={w - 8} height={h - 4}>
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-0.5 text-center">
-                    <PartIcon shape={def.shape} className="h-4 w-6 text-[var(--lab-cyan)]" />
-                    <span className="font-mono text-[8px] tracking-[0.1em] text-[var(--lab-ink)]">{def.code}</span>
-                  </div>
-                </foreignObject>
+                <circle cx={left + 8} cy={top + 8} r="2.5" fill="var(--lab-cyan)" />
+                <text
+                  x={left + width / 2}
+                  y={top + height / 2 + 4}
+                  textAnchor="middle"
+                  fontFamily="ui-monospace, monospace"
+                  fontSize="11"
+                  fontWeight="bold"
+                  fill="var(--lab-ink)"
+                >
+                  {def.code}
+                </text>
+                {/* pin bumps — one per physical DIP pin, straddling the gutter */}
+                {Array.from({ length: half }, (_, i) => (
+                  <rect key={`pt${i}`} x={colX(c0 + i) - 2} y={top - 4} width={4} height={4} fill="oklch(0.75 0.03 260)" />
+                ))}
+                {Array.from({ length: half }, (_, i) => (
+                  <rect key={`pb${i}`} x={colX(c0 + i) - 2} y={top + height} width={4} height={4} fill="oklch(0.75 0.03 260)" />
+                ))}
               </g>
             );
           })}

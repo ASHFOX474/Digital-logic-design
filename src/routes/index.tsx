@@ -22,7 +22,7 @@ function Index() {
       <div className="pointer-events-none absolute -left-32 top-20 h-96 w-96 rounded-full bg-[oklch(0.55_0.20_305/0.25)] blur-3xl" aria-hidden />
       <div className="pointer-events-none absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-[oklch(0.60_0.18_200/0.22)] blur-3xl" aria-hidden />
 
-      <div className="relative mx-auto max-w-7xl px-6 py-8">
+      <div className="relative mx-auto max-w-7xl px-3 py-5 sm:px-6 sm:py-8">
         <Header />
         <div className="mt-6 grid gap-6 lg:grid-cols-[300px_1fr_300px]">
           <div className="flex flex-col gap-6">
