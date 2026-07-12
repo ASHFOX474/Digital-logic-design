@@ -12,7 +12,7 @@ export function LogicSimplifier() {
       <PanelHeader eyebrow="TOOL · 01" title="LOGIC SIMPLIFIER" accent="var(--lab-cyan)" />
       <div className="mt-4 space-y-3 font-mono text-sm">
         <div className="flex items-center justify-between rounded-md border border-[var(--lab-border)] bg-[oklch(0.12_0.03_265/.7)] px-3 py-2">
-          <span className="text-[var(--lab-muted)]">AB + AB</span>
+          <span className="text-[var(--lab-muted)]">AB + AB'</span>
         </div>
         <div className="flex items-center justify-center text-[var(--lab-cyan)]" style={{ animation: "lab-pulse 2s ease-in-out infinite" }}>
           ▲ SIMPLIFIED ▼

@@ -145,7 +145,11 @@
 @keyframes lab-wink     { 0%,60%,100%{transform:scaleY(1)} 75%{transform:scaleY(0.1)} }
 @keyframes lab-pulse    { 0%,100%{opacity:.55;filter:brightness(1)} 50%{opacity:1;filter:brightness(1.4)} }
 @keyframes lab-pulse-sm { 0%,100%{opacity:.4} 50%{opacity:1} }
-@keyframes lab-glow     { 0%,100%{text-shadow:0 0 12px oklch(0.86 0.16 200/.6),0 0 28px oklch(0.86 0.16 200/.35)} 50%{text-shadow:0 0 20px oklch(0.86 0.16 200/.9),0 0 48px oklch(0.86 0.16 200/.55)} }
+/* Uses `filter: drop-shadow()` rather than `text-shadow` on purpose: text-shadow can never
+ * be handed off to the GPU and repaints on the CPU every frame for as long as this runs,
+ * while an animated `filter` can be promoted to its own compositor layer. Same glow look,
+ * far cheaper to keep running indefinitely (this animation is used site-wide on titles). */
+@keyframes lab-glow     { 0%,100%{filter:drop-shadow(0 0 12px oklch(0.86 0.16 200/.6)) drop-shadow(0 0 28px oklch(0.86 0.16 200/.35))} 50%{filter:drop-shadow(0 0 20px oklch(0.86 0.16 200/.9)) drop-shadow(0 0 48px oklch(0.86 0.16 200/.55))} }
 @keyframes lab-flow     { 0%{offset-distance:0%;opacity:0} 8%{opacity:1} 92%{opacity:1} 100%{offset-distance:100%;opacity:0} }
 @keyframes lab-dash     { to { stroke-dashoffset: -40; } }
 @keyframes lab-spark    { 0%{transform:scale(.4);opacity:0} 30%{opacity:1} 100%{transform:scale(1.6);opacity:0} }
@@ -154,7 +158,7 @@
 @keyframes lab-row      { 0%,100%{background:transparent} 50%{background:oklch(0.86 0.16 200/.18)} }
 @keyframes lab-exhaust  { 0%{opacity:.9;transform:translateX(0) scaleX(1)} 100%{opacity:0;transform:translateX(-14px) scaleX(2)} }
 @keyframes lab-shift    { 0%,100%{transform:translateX(0)} 50%{transform:translateX(2px)} }
-@keyframes lab-conveyor { to { background-position: 40px 0, -40px 0; } }
+@keyframes lab-conveyor { to { transform: translate3d(40px, 40px, 0); } }
 @keyframes lab-appear   { 0%{opacity:0;transform:translateY(-4px) scale(.8)} 60%{opacity:1;transform:translateY(0) scale(1.05)} 100%{opacity:1;transform:scale(1)} }
 @keyframes lab-fade-cycle { 0%,15%{opacity:1} 45%,100%{opacity:0} }
 
@@ -172,13 +176,30 @@
     linear-gradient(180deg, var(--lab-bg-1), var(--lab-bg-2));
 }
 
+/* Fix #1 (transform instead of background-position) made the grid's own animation cheap, but
+ * it didn't fix the real cost: `.lab-panel` (Header, sidebar, Trainer Kit board) sits on top of
+ * this layer and uses `backdrop-filter: blur()`. ANY continuously-moving layer sitting behind a
+ * `backdrop-filter` element forces the browser to re-sample and re-blur those pixels every
+ * single frame forever — regardless of whether the motion itself is GPU-compositor-friendly.
+ * That's sustained GPU work for as long as the tab is open, which is what was driving fan/heat
+ * up like a running game, worst on Virtual Lab because the sidebar + trainer-kit panels there
+ * cover almost the whole viewport (biggest blurred area, longest time spent on the page).
+ *
+ * Fix #2: the crawl is purely decorative and mostly hidden behind the panels anyway, so freeze
+ * it. A static grid still looks identical at a glance, but now the backdrop-filter blur behind
+ * every panel only has to be computed once and cached instead of every frame. */
 .lab-circuit-bg {
+  position: absolute;
+  overflow: hidden;
+}
+.lab-circuit-bg::before {
+  content: "";
+  position: absolute;
+  inset: -40px; /* one tile of overscan, kept in case the crawl is ever re-enabled */
   background-image:
     linear-gradient(var(--lab-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--lab-grid) 1px, transparent 1px);
   background-size: 40px 40px, 40px 40px;
-  background-position: 0 0, 0 0;
-  animation: lab-conveyor 8s linear infinite;
 }
 
 .lab-panel {
@@ -366,5 +387,27 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+  }
+}
+
+/* ---------- battery / heat savings, added without changing any visible feature ---------- */
+
+/* When the browser tab is in the background (switched away from, minimized, screen locked),
+ * `<html data-tab-hidden>` gets set by a tiny listener in __root.tsx. Every infinite CSS
+ * animation on the page pauses instantly instead of continuing to run unseen — that's pure
+ * wasted battery/heat with zero benefit since nothing is on screen. Everything resumes exactly
+ * where it left off the moment the tab is visible again. */
+html[data-tab-hidden] * {
+  animation-play-state: paused !important;
+}
+
+/* Respect the OS-level "reduce motion" setting some people turn on specifically to save
+ * battery or avoid motion sickness. All the "diorama" animations are decorative (glow, drift,
+ * scanlines, the crawling grid) rather than functional, so they're safe to freeze here — no
+ * feature depends on any of them still moving. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

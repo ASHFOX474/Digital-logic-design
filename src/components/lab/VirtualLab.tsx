@@ -170,8 +170,19 @@ export function VirtualLab() {
       <div className="relative mx-auto flex min-h-screen max-w-[1960px] flex-col px-3 py-4 sm:px-6 sm:py-6">
         <Header />
 
-        <div className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-4 sm:mt-6 sm:gap-6 md:grid-cols-[260px_1fr] lg:grid-cols-[300px_1fr]">
-          <div className="h-[380px] md:h-[calc(100vh-170px)] lg:h-[calc(100vh-140px)]">
+        {/*
+          IMPORTANT: the md/lg column templates below use `minmax(0, 1fr)` rather than a bare
+          `1fr`. Tailwind's own `grid-cols-N` utilities compile to `repeat(N, minmax(0, 1fr))`,
+          but a literal arbitrary-value track like `1fr` has an implicit minimum width equal to
+          the min-content size of whatever is placed in it. TrainerKit's breadboard SVG carries
+          a hard `min-w-[900px]`, so without `minmax(0, ...)` that 900px floor propagates up into
+          this grid track, the row overflows past the viewport at md/lg widths, and — because the
+          outer <main> above has `overflow-hidden` — that overflow was silently clipped instead of
+          being scrollable. `minmax(0, 1fr)` lets the track shrink to the available space and lets
+          TrainerKit's own internal `overflow-auto` wrapper handle horizontal scrolling instead.
+        */}
+        <div className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-4 sm:mt-6 sm:gap-6 md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)]">
+          <div className="h-[380px] min-w-0 md:h-[calc(100vh-170px)] lg:h-[calc(100vh-140px)]">
             <ComponentSidebar
               activeTool={activeTool}
               onSelectTool={handleSelectTool}
@@ -182,7 +193,7 @@ export function VirtualLab() {
             />
           </div>
 
-          <div className="h-[75vh] min-h-[460px] md:h-[calc(100vh-170px)] lg:h-[calc(100vh-140px)]">
+          <div className="h-[75vh] min-h-[460px] min-w-0 md:h-[calc(100vh-170px)] lg:h-[calc(100vh-140px)]">
             <TrainerKit
               armedPartId={armedPartId}
               placedComponents={placedComponents}

@@ -301,7 +301,7 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         pins: 16,
         footprint: { w: 8, h: 2 },
         description:
-          "Drives a common-anode 7-segment display (active-low a-g) from a BCD input (A-D). LT = lamp test, BI/RBO = blanking, RBI = ripple blank. Pin 16 = VCC, Pin 8 = GND.",
+          "Drives a common-anode 7-segment display (active-low a-g) from a BCD input (A-D). LT (pin 3, lamp test) and BI/RBO (pin 4, blanking) are active-low and read LOW when unwired in this simulator — LT floating forces every segment on, and BI/RBO floating blanks the display — so tie both to the VCC bus for normal decoding. RBI (pin 5, ripple blank) only matters if you want to display a '0'; tie it to VCC too, or leave it low to blank a leading zero. Pin 16 = VCC, Pin 8 = GND.",
         pinout: {
           left: ["B", "C", "LT", "BI/RBO", "RBI", "D", "A", "GND"],
           right: ["VCC", "f", "g", "a", "b", "c", "d", "e"],
@@ -437,7 +437,7 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         pins: 16,
         footprint: { w: 8, h: 2 },
         description:
-          "Dual JK flip-flop. No invalid state; toggles when J=K=1. Wire CLK1/CLK2 to the CLK TAP to clock each half. PR/CLR are active-low, applied at the next clock edge. Pin 5 = VCC, Pin 13 = GND.",
+          "Dual JK flip-flop. No invalid state; toggles when J=K=1. Wire CLK1/CLK2 to the CLK TAP to clock each half. 1PR (pin 2), 1CLR (pin 3), 2PR (pin 8), 2CLR (pin 9) are active-low — an unwired pin reads LOW in this simulator, which asserts it, so tie all four to the VCC bus for normal operation and only pull one low (e.g. to a switch) to preset/clear that half. Pin 5 = VCC, Pin 13 = GND.",
         pinout: {
           left: ["1CLK", "1PR", "1CLR", "1J", "VCC", "2CLK", "2J", "2PR"],
           right: ["1K", "1Q", "1Q\u0305", "GND", "2CLR", "2K", "2Q", "2Q\u0305"],
@@ -482,7 +482,7 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         pins: 14,
         footprint: { w: 7, h: 2 },
         description:
-          "Dual D flip-flop. Captures D on the clock edge — wire CLK1/CLK2 to the CLK TAP. PR/CLR are active-low, applied at the next clock edge. Pin 14 = VCC, Pin 7 = GND.",
+          "Dual D flip-flop. Captures D on the clock edge — wire CLK1/CLK2 to the CLK TAP. 1CLR (pin 1), 1PR (pin 4), 2PR (pin 10), 2CLR (pin 13) are active-low — an unwired pin reads LOW in this simulator, which asserts it, so tie all four to the VCC bus for normal operation and only pull one low (e.g. to a switch) to preset/clear that half. Pin 14 = VCC, Pin 7 = GND.",
         pinout: {
           left: ["1CLR", "1D", "1CLK", "1PR", "1Q", "1Q\u0305", "GND"],
           right: ["VCC", "2Q\u0305", "2Q", "2PR", "2CLK", "2D", "2CLR"],
@@ -563,7 +563,7 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
         pins: 14,
         footprint: { w: 7, h: 2 },
         description:
-          "Serial-in, parallel-out 8-bit shift register (QA-QH). Data in = A AND B, shifts on each CLK rising edge (wire CLK to the CLK TAP); CLR is active-low, applied at the next clock edge. Pin 14 = VCC, Pin 7 = GND.",
+          "Serial-in, parallel-out 8-bit shift register (QA-QH). Data in = A AND B, shifts on each CLK rising edge (wire CLK to the CLK TAP). CLR (/MR, pin 9) is active-low and asynchronous — tie it to the VCC bus for normal operation, or pull it low (wire to GND / a switch) to reset. Pin 14 = VCC, Pin 7 = GND.",
         pinout: {
           left: ["A", "B", "QA", "QB", "QC", "QD", "GND"],
           right: ["VCC", "QH", "QG", "QF", "QE", "CLR", "CLK"],
@@ -573,10 +573,10 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
           gndPin: 7,
           sequential: [
             {
-              clockPin: 13,
+              clockPin: 8,
               stateBits: 8,
               next: (state, pin) => {
-                if (!pin(12)) return Array(8).fill(false); // CLR active low, async on real hw
+                if (!pin(9)) return Array(8).fill(false); // CLR (/MR), active low, async on real hw
                 const din = pin(1) && pin(2); // A AND B
                 return [din, ...state.slice(0, 7)];
               },
@@ -585,10 +585,10 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
                 4: state[1],
                 5: state[2],
                 6: state[3],
-                8: state[4],
-                9: state[5],
-                10: state[6],
-                11: state[7],
+                10: state[4],
+                11: state[5],
+                12: state[6],
+                13: state[7],
               }),
             },
           ],
@@ -612,7 +612,7 @@ export const COMPONENT_LIBRARY: PartCategory[] = [
       },
       {
         id: "tool-ic-extractor",
-        label: "IC Extractor",
+        label: "IC & wire Extractor",
         code: "TOOL",
         category: "tools",
         shape: "tool-extractor",

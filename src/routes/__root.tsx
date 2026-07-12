@@ -116,6 +116,20 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  // The whole site is full of decorative infinite CSS animations (glow, drift, the crawling
+  // grid, scanlines). They're cheap enough while actually on screen, but there's no reason for
+  // them to keep running — burning CPU/GPU and battery — while the tab is backgrounded or the
+  // screen is locked. Toggling this attribute flips a single CSS rule (see styles.css) that
+  // pauses every animation at once and resumes them exactly where they left off.
+  useEffect(() => {
+    const applyVisibility = () => {
+      document.documentElement.toggleAttribute("data-tab-hidden", document.hidden);
+    };
+    applyVisibility();
+    document.addEventListener("visibilitychange", applyVisibility);
+    return () => document.removeEventListener("visibilitychange", applyVisibility);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
