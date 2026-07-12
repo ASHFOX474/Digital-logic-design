@@ -28,6 +28,14 @@ const OUT_X = 552, OUT_Y = 160;
 // including narrow phone screens, where the whole diorama simply scales down uniformly.
 const CANVAS_W = 600;
 const CANVAS_H = 300;
+// Container-query pixel-to-cqw helper. The diorama's outer box is given
+// `containerType: "inline-size"` below, so any px value converted with cq()
+// scales fluidly with the diorama's actual rendered width — including on
+// narrow phone screens — instead of staying a fixed pixel size like a plain
+// Tailwind class (e.g. `w-24`) would. Because the box's aspect ratio is
+// locked to CANVAS_W:CANVAS_H, one scale factor (relative to CANVAS_W) is
+// valid for both horizontal and vertical measurements.
+const cq = (px: number) => `${(px / CANVAS_W) * 100}cqw`;
 
 export function Breadboard() {
   const [inputs, setInputs] = useState<[boolean, boolean, boolean, boolean]>([true, true, false, false]);
@@ -124,6 +132,7 @@ export function Breadboard() {
       <div
         className="relative mt-4 aspect-[2/1] w-full rounded-2xl border border-[var(--lab-border)]"
         style={{
+          containerType: "inline-size",
           background:
             "repeating-linear-gradient(0deg, oklch(0.13 0.03 260) 0 22px, oklch(0.16 0.03 260) 22px 24px)," +
             "linear-gradient(180deg, oklch(0.19 0.04 265), oklch(0.11 0.03 260))",
@@ -175,10 +184,15 @@ export function Breadboard() {
         {LETTERS.map((L, i) => (
           <div
             key={L}
-            className="absolute flex items-center gap-2"
-            style={{ left: `${(12 / CANVAS_W) * 100}%`, top: `${(IY[i] / CANVAS_H) * 100}%`, transform: "translateY(-50%)" }}
+            className="absolute flex items-center"
+            style={{
+              left: `${(12 / CANVAS_W) * 100}%`,
+              top: `${(IY[i] / CANVAS_H) * 100}%`,
+              transform: "translateY(-50%)",
+              gap: cq(8),
+            }}
           >
-            <span className="w-3 font-mono text-sm font-bold" style={{ color: WIRE[L].stroke }}>
+            <span className="font-mono font-bold" style={{ color: WIRE[L].stroke, width: cq(12), fontSize: cq(14) }}>
               {L}
             </span>
             <button
@@ -186,8 +200,10 @@ export function Breadboard() {
               aria-label={`Toggle input ${L}`}
               role="switch"
               aria-checked={inputs[i]}
-              className="h-8 w-8 rounded-full border transition"
+              className="rounded-full border transition"
               style={{
+                width: cq(32),
+                height: cq(32),
                 borderColor: WIRE[L].stroke,
                 background: inputs[i]
                   ? `radial-gradient(circle at 30% 30%, oklch(1 0 0/.6), transparent 55%), radial-gradient(circle, var(--lab-pink), oklch(0.32 0.18 15))`
@@ -200,8 +216,8 @@ export function Breadboard() {
         ))}
 
         <div
-          className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-6"
-          style={{ top: `${(160 / CANVAS_H) * 100}%` }}
+          className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2"
+          style={{ top: `${(160 / CANVAS_H) * 100}%`, gap: cq(24) }}
         >
           <MiniChip label="74LS08" />
           <MiniChip label="74LS32" />
@@ -209,12 +225,16 @@ export function Breadboard() {
         </div>
 
         <div
-          className="absolute right-4 flex flex-col items-center gap-2"
-          style={{ top: `${((OUT_Y + 10) / CANVAS_H) * 100}%`, transform: "translateY(-50%)" }}
+          className="absolute flex flex-col items-center"
+          style={{ right: cq(16), top: `${((OUT_Y + 10) / CANVAS_H) * 100}%`, transform: "translateY(-50%)", gap: cq(8) }}
         >
           <div
-            className="h-12 w-12 rounded-full border-2"
+            className="rounded-full"
             style={{
+              width: cq(48),
+              height: cq(48),
+              borderWidth: cq(2),
+              borderStyle: "solid",
               borderColor: "var(--lab-pink)",
               background: output
                 ? "radial-gradient(circle at 30% 30%, oklch(1 0 0/.7), transparent 55%), radial-gradient(circle, var(--lab-pink), oklch(0.32 0.18 15))"
@@ -223,7 +243,7 @@ export function Breadboard() {
               animation: output ? "lab-pulse 1.4s ease-in-out infinite" : undefined,
             }}
           />
-          <span className="font-mono text-[10px] tracking-[0.28em]" style={{ color: output ? "var(--lab-pink)" : "var(--lab-muted)" }}>
+          <span className="font-mono tracking-[0.28em]" style={{ color: output ? "var(--lab-pink)" : "var(--lab-muted)", fontSize: cq(10) }}>
             OUTPUT
           </span>
         </div>
@@ -240,19 +260,20 @@ export function Breadboard() {
 
 function MiniChip({ label }: { label: string }) {
   const pins = 7;
+  const pinStyle = { width: cq(8), height: cq(6), background: "oklch(0.75 0.03 260)" };
   return (
     <div className="relative">
-      <div className="lab-chip flex h-16 w-24 items-center justify-center" style={{ fontSize: 11 }}>
+      <div className="lab-chip flex items-center justify-center" style={{ width: cq(96), height: cq(64), fontSize: cq(11) }}>
         <span>{label}</span>
       </div>
-      <div className="absolute inset-x-1.5 -top-1 flex justify-between">
+      <div className="absolute flex justify-between" style={{ left: cq(6), right: cq(6), top: cq(-4) }}>
         {Array.from({ length: pins }).map((_, i) => (
-          <span key={i} className="h-1.5 w-2 rounded-b-sm bg-[oklch(0.75_0.03_260)]" />
+          <span key={i} className="rounded-b-sm" style={pinStyle} />
         ))}
       </div>
-      <div className="absolute inset-x-1.5 -bottom-1 flex justify-between">
+      <div className="absolute flex justify-between" style={{ left: cq(6), right: cq(6), bottom: cq(-4) }}>
         {Array.from({ length: pins }).map((_, i) => (
-          <span key={i} className="h-1.5 w-2 rounded-t-sm bg-[oklch(0.75_0.03_260)]" />
+          <span key={i} className="rounded-t-sm" style={pinStyle} />
         ))}
       </div>
     </div>

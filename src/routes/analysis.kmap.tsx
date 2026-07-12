@@ -51,7 +51,15 @@ function KMapPage() {
   const [outputForm, setOutputForm] = useState<"SOP" | "POS">("SOP");
   const [expr, setExpr] = useState("AB'C' + BC");
   const [mintermRaw, setMintermRaw] = useState("sum_of(1,3,5,6,7)");
-  const [numVars, setNumVars] = useState(3);
+  // Kept as raw text so the field can be freely cleared/retyped on mobile (where there are no
+  // up/down arrow keys to nudge a controlled number). We only clamp into [2,6] once there's a
+  // real number to clamp, and again on blur — never mid-edit while the box is momentarily empty.
+  const [numVarsInput, setNumVarsInput] = useState("3");
+  const numVars = useMemo(() => {
+    const n = Number(numVarsInput);
+    if (numVarsInput.trim() === "" || Number.isNaN(n)) return 2;
+    return Math.max(2, Math.min(6, Math.trunc(n)));
+  }, [numVarsInput]);
   const [dontCareRaw, setDontCareRaw] = useState("");
   const [varNamesRaw, setVarNamesRaw] = useState("A,B,C");
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
@@ -289,10 +297,18 @@ function KMapPage() {
             Number of variables
             <input
               type="number"
+              inputMode="numeric"
               min={2}
               max={6}
-              value={numVars}
-              onChange={(e) => setNumVars(Math.max(2, Math.min(6, Number(e.target.value) || 2)))}
+              value={numVarsInput}
+              onChange={(e) => {
+                // Let the box hold whatever's being typed (including empty)
+                // without clamping — clamping happens in the `numVars` memo above (only
+                // once the text is a real number) and definitively onBlur below.
+                const raw = e.target.value;
+                if (raw.length <= 2 && /^-?\d*$/.test(raw)) setNumVarsInput(raw);
+              }}
+              onBlur={() => setNumVarsInput(String(numVars))}
               className="mt-1 w-full rounded-md border border-[var(--lab-border)] bg-[oklch(0.11_0.03_260/.8)] px-3 py-2 font-mono text-sm text-[var(--lab-ink)] outline-none focus:border-[var(--lab-cyan)]"
             />
           </label>
