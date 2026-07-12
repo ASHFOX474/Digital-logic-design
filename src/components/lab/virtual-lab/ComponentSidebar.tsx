@@ -118,13 +118,14 @@ export function ComponentSidebar({
 
                         {/* Wire spool color swatches, shown inline once armed */}
                         {part.shape === "tool-wire" && isActiveTool && (
-                          <div className="mt-1 flex items-center gap-1.5 px-2 pb-1">
+                          <div className="mt-1 flex flex-wrap items-center gap-2 px-2 pb-1.5">
                             {WIRE_COLORS.map((c) => (
                               <button
                                 key={c.id}
                                 type="button"
                                 onClick={() => onWireColorChange(c.id)}
                                 aria-label={`${c.id} wire`}
+                                title={c.id}
                                 className="h-4 w-4 rounded-full border transition"
                                 style={{
                                   background: c.swatch,

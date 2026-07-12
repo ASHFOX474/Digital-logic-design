@@ -8,7 +8,7 @@
  * ========================================================================== */
 
 export const HOLE = 22;
-export const COLS = 30; // number of breadboard columns (this is "half" a full-size board) — widened from 22 to give more room to build circuits
+export const COLS = 36; // number of breadboard columns (this is "half" a full-size board) — widened from 30 to 36 to fit more ICs per experiment
 
 export const MATRIX_X = 260;
 
@@ -17,16 +17,15 @@ export const TOPBLOCK_Y = 258;
 // Row 'f' (top-most row of the bottom 5-row block, after the centre gutter)
 export const BOTBLOCK_Y = TOPBLOCK_Y + 4 * HOLE + 42;
 
-export const VCC_BUS_Y = TOPBLOCK_Y - 46;
-export const OUTPUT_TAP_Y = VCC_BUS_Y - 34;
+export const VCC_BUS_Y = TOPBLOCK_Y - 34;
+export const OUTPUT_TAP_Y = VCC_BUS_Y - 26;
 
 /** Half-gap (px) between the two +5V edge terminals and VCC_BUS_Y — i.e. the
- * terminals sit at VCC_BUS_Y ± VCC_TERMINAL_GAP. Bumped up to space the two
- * +5V nodes further apart so they're easier to tell apart and wire to. */
-export const VCC_TERMINAL_GAP = 26;
+ * terminals sit at VCC_BUS_Y ± VCC_TERMINAL_GAP. */
+export const VCC_TERMINAL_GAP = 24;
 
-export const GND_BUS_Y = BOTBLOCK_Y + 4 * HOLE + 46;
-export const INPUT_TAP_Y = GND_BUS_Y + 34;
+export const GND_BUS_Y = BOTBLOCK_Y + 4 * HOLE + 34;
+export const INPUT_TAP_Y = GND_BUS_Y + 26;
 
 export const MATRIX_SPAN = (COLS - 1) * HOLE;
 export const MATRIX_RIGHT_X = MATRIX_X + MATRIX_SPAN;

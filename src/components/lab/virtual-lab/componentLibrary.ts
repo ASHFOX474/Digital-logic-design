@@ -628,12 +628,24 @@ export const ALL_PARTS: Record<string, PartDef> = Object.fromEntries(
   COMPONENT_LIBRARY.flatMap((cat) => cat.parts.map((p) => [p.id, p])),
 );
 
+/**
+ * Jumper-wire palette. Hues are spread evenly around the wheel (~35-40°
+ * apart) at similar lightness/chroma so any two colors stay easy to tell
+ * apart even when several wires cross in a dense circuit — that matters more
+ * than matching the board's own semantic colors (VCC pink, GND cyan, LED
+ * mint, clock warm), which is why those aren't just reused here: a wire that
+ * happens to share a rail's own color used to disappear next to it.
+ */
 export const WIRE_COLORS = [
-  { id: "cyan", swatch: "var(--lab-cyan)" },
-  { id: "mint", swatch: "var(--lab-mint)" },
-  { id: "warm", swatch: "var(--lab-warm)" },
-  { id: "pink", swatch: "var(--lab-pink)" },
-  { id: "purple", swatch: "var(--lab-purple)" },
+  { id: "red", swatch: "oklch(0.62 0.23 25)" },
+  { id: "orange", swatch: "oklch(0.72 0.19 55)" },
+  { id: "yellow", swatch: "oklch(0.86 0.17 95)" },
+  { id: "green", swatch: "oklch(0.74 0.19 145)" },
+  { id: "cyan", swatch: "oklch(0.78 0.14 200)" },
+  { id: "blue", swatch: "oklch(0.62 0.20 255)" },
+  { id: "purple", swatch: "oklch(0.62 0.21 300)" },
+  { id: "pink", swatch: "oklch(0.70 0.22 340)" },
+  { id: "white", swatch: "oklch(0.93 0.01 90)" },
 ] as const;
 
 export type WireColorId = (typeof WIRE_COLORS)[number]["id"];

@@ -64,14 +64,17 @@ export interface Wire {
 }
 
 const GRID = 20;
-const VIEW = { w: 1050, h: 800 };
+// Width derives from the matrix's actual right edge (MATRIX_RIGHT_X, which grows with COLS)
+// plus the same ~152px margin the board used at COLS=30, so widening the breadboard in
+// breadboardGeometry.ts doesn't clip the bus rows/gutter or need a manual resize here.
+const VIEW = { w: MATRIX_RIGHT_X + 152, h: 700 };
 // Clamp bounds for where a part can be dropped/tapped onto the board. Every part renders as a
 // DIP IC straddling the centre gutter, so only the x clamp actually matters for placement — y is
 // kept generic in case future non-DIP parts need it.
-const DROP_BOUNDS = { x: 20, y: 560, w: VIEW.w - 40, h: 0 };
+const DROP_BOUNDS = { x: 20, y: 400, w: VIEW.w - 40, h: 0 };
 const HOLE_HIT_R = 12; // generous invisible hit-radius so tiny breadboard holes are easy to tap on touch screens
-/** Perpendicular spacing applied between wires that share the exact same pair of holes. */
-const OVERLAP_OFFSET = 9;
+/** Perpendicular spacing applied between wires whose routed paths would otherwise overlap. */
+const OVERLAP_OFFSET = 12;
 
 /** An in-progress "pick this end up, then click a hole to drop it" wire re-route. */
 export interface EndpointEdit {
@@ -96,9 +99,42 @@ function orthogonalPath(a: { x: number; y: number }, b: { x: number; y: number }
   return `M ${a.x} ${a.y} L ${a.x} ${midY} L ${b.x} ${midY} L ${b.x} ${b.y}`;
 }
 
-/** Unordered key identifying which pair of holes a wire spans, so overlapping wires can be detected. */
-function pairKey(w: Wire) {
-  return w.from.key < w.to.key ? `${w.from.key}|${w.to.key}` : `${w.to.key}|${w.from.key}`;
+/** The row (pre-offset) a wire's orthogonal path bends along, plus the horizontal span it
+ *  covers on that row — the two pieces of info needed to tell whether two *different* wires
+ *  would actually render on top of each other, not just wires sharing the same pair of holes. */
+function bendSpan(w: Wire) {
+  return {
+    row: snap((w.from.y + w.to.y) / 2),
+    x0: Math.min(w.from.x, w.to.x),
+    x1: Math.max(w.from.x, w.to.x),
+  };
+}
+
+function spansOverlap(a: { x0: number; x1: number }, b: { x0: number; x1: number }) {
+  return a.x0 <= b.x1 && b.x0 <= a.x1;
+}
+
+/** Tiny union-find used to cluster wires that visually collide (same bend row, overlapping
+ *  horizontal span) so every wire in a colliding cluster gets its own parallel lane. */
+class WireDSU {
+  private parent = new Map<string, string>();
+  find(x: string): string {
+    if (!this.parent.has(x)) this.parent.set(x, x);
+    let root = x;
+    while (this.parent.get(root) !== root) root = this.parent.get(root)!;
+    let cur = x;
+    while (this.parent.get(cur) !== root) {
+      const next = this.parent.get(cur)!;
+      this.parent.set(cur, root);
+      cur = next;
+    }
+    return root;
+  }
+  union(a: string, b: string) {
+    const ra = this.find(a);
+    const rb = this.find(b);
+    if (ra !== rb) this.parent.set(ra, rb);
+  }
 }
 
 interface TrainerKitProps {
@@ -281,27 +317,44 @@ export function TrainerKit({
     holes.push({ key: VCC_NODE, x: 70, y: VCC_BUS_Y + VCC_TERMINAL_GAP });
     holes.push({ key: GND_NODE, x: 70, y: GND_BUS_Y });
     // Matches the CLK TAP dot's actual position: cx=70,cy=-10 inside the
-    // clock generator's <g transform="translate(MATRIX_X-200, INPUT_TAP_Y+60)">.
-    holes.push({ key: CLK_NODE, x: MATRIX_X - 200 + 70, y: INPUT_TAP_Y + 60 - 10 });
+    // clock generator's <g transform="translate(MATRIX_X-200, INPUT_TAP_Y+36)">.
+    holes.push({ key: CLK_NODE, x: MATRIX_X - 200 + 70, y: INPUT_TAP_Y + 36 - 10 });
     return holes;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Wires that connect the exact same pair of holes get a small perpendicular offset each,
-  // so they render as distinct parallel lines instead of one indistinguishable stack.
+  // Any wires whose orthogonal routing would bend along the same row and overlap horizontally
+  // get clustered together (not just wires sharing the exact same pair of holes), then each
+  // member of a cluster gets its own small perpendicular offset so they render as distinct
+  // parallel lines instead of an indistinguishable stack — this is what actually causes wires
+  // to become hard to tell apart in denser circuits.
   const overlapGroups = useMemo(() => {
+    const dsu = new WireDSU();
+    const spans = wires.map((w) => ({ id: w.id, ...bendSpan(w) }));
+    for (let i = 0; i < spans.length; i++) {
+      for (let j = i + 1; j < spans.length; j++) {
+        if (spans[i].row === spans[j].row && spansOverlap(spans[i], spans[j])) {
+          dsu.union(spans[i].id, spans[j].id);
+        }
+      }
+    }
     const groups = new Map<string, string[]>();
     for (const w of wires) {
-      const k = pairKey(w);
-      const list = groups.get(k);
+      const root = dsu.find(w.id);
+      const list = groups.get(root);
       if (list) list.push(w.id);
-      else groups.set(k, [w.id]);
+      else groups.set(root, [w.id]);
     }
-    return groups;
+    // Stable, deterministic ordering within a cluster (by id) so lane assignment doesn't jitter
+    // as unrelated wires elsewhere are added/removed.
+    for (const list of groups.values()) list.sort();
+    const byWire = new Map<string, string[]>();
+    for (const w of wires) byWire.set(w.id, groups.get(dsu.find(w.id))!);
+    return byWire;
   }, [wires]);
 
   const wireOffset = (w: Wire) => {
-    const group = overlapGroups.get(pairKey(w)) ?? [w.id];
+    const group = overlapGroups.get(w.id) ?? [w.id];
     if (group.length <= 1) return 0;
     const idx = group.indexOf(w.id);
     return (idx - (group.length - 1) / 2) * OVERLAP_OFFSET;
@@ -358,6 +411,7 @@ export function TrainerKit({
           onDrop={handleDrop}
           onPointerMove={dragMoveComponent}
           onPointerUp={endDragComponent}
+          onClick={handleBoardTap}
         >
           <defs>
             <linearGradient id="vlab-desk" x1="0" y1="0" x2="0" y2="1">
@@ -366,22 +420,14 @@ export function TrainerKit({
             </linearGradient>
           </defs>
 
-          <rect
-            x={0}
-            y={0}
-            width={VIEW.w}
-            height={VIEW.h}
-            rx={18}
-            fill="url(#vlab-desk)"
-            onClick={handleBoardTap}
-          />
+          <rect x={0} y={0} width={VIEW.w} height={VIEW.h} rx={18} fill="url(#vlab-desk)" />
 
           {/* ---------- Output display: LEDs (top) ---------- */}
-          <text x={MATRIX_X - 10} y={90} fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="2" fill="var(--lab-muted)">
+          <text x={MATRIX_X - 10} y={103} fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="2" fill="var(--lab-muted)">
             OUTPUT DISPLAY
           </text>
           {Array.from({ length: 8 }, (_, i) => tapX(i)).map((x, i) => (
-            <g key={`led-${i}`} transform={`translate(${x}, 125)`}>
+            <g key={`led-${i}`} transform={`translate(${x}, 148)`}>
               <circle r="9" fill="oklch(0.12 0.02 260)" stroke="var(--lab-border)" />
               <circle
                 r="6"
@@ -391,7 +437,7 @@ export function TrainerKit({
               <text y="20" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="8" fill="var(--lab-muted)">
                 D{i}
               </text>
-              <line x1={0} y1={13} x2={0} y2={OUTPUT_TAP_Y - 55 - 12} stroke="var(--lab-border)" strokeWidth="1.5" strokeDasharray="2 3" />
+              <line x1={0} y1={13} x2={0} y2={OUTPUT_TAP_Y - 148} stroke="var(--lab-border)" strokeWidth="1.5" strokeDasharray="2 3" />
             </g>
           ))}
 
@@ -421,16 +467,9 @@ export function TrainerKit({
           <PowerTerminal x={70} y={VCC_BUS_Y + VCC_TERMINAL_GAP} label="+5V" color="var(--lab-pink)" nodeKey={VCC_NODE} activeKey={wireDraft?.key} />
           <PowerTerminal x={70} y={GND_BUS_Y} label="GND" color="var(--lab-cyan)" nodeKey={GND_NODE} activeKey={wireDraft?.key} />
 
-          {/* ---------- The breadboard itself (half board) ---------- */}
-          <rect
-            x={MATRIX_X - 26}
-            y={TOPBLOCK_Y - 34}
-            width={MATRIX_RIGHT_X - MATRIX_X + 52}
-            height={BOTBLOCK_Y - TOPBLOCK_Y + 4 * HOLE - (TOPBLOCK_Y - 34) + 34}
-            rx="10"
-            fill="oklch(0.86 0.01 90 / 0.95)"
-            stroke="oklch(0.55 0.01 90)"
-          />
+          {/* ---------- The breadboard itself (half board): dots sit directly on the dark
+             canvas, matching the trainer kit's original look — only the IC gutter gets its
+             own grey bar below. ---------- */}
           {/* centre gutter */}
           <rect
             x={MATRIX_X - 26}
@@ -554,6 +593,17 @@ export function TrainerKit({
                   <path d={d} fill="none" stroke="var(--lab-ink)" strokeWidth="6" strokeLinecap="round" opacity="0.35" />
                 )}
                 <path d={d} fill="none" stroke={colorVar(w.color)} strokeWidth="5" opacity="0.12" />
+                {/* Dark casing behind every wire — keeps crossing/overlapping wires readable
+                   against each other and against the light breadboard body, the way real
+                   metro-map style diagrams outline each line. */}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke="oklch(0.08 0.01 260)"
+                  strokeWidth={(isHovered || isSelected ? 3.2 : 2.5) + 2.2}
+                  strokeLinecap="round"
+                  opacity={isEditingThis ? 0.35 : 0.75}
+                />
                 <path
                   d={d}
                   fill="none"
@@ -574,9 +624,9 @@ export function TrainerKit({
 
                 {/* Recolor / delete popup for the selected wire. */}
                 {isSelected && !endpointEdit && (
-                  <foreignObject x={midX - 68} y={midY - 30} width="136" height="28" style={{ overflow: "visible" }}>
+                  <foreignObject x={midX - 92} y={midY - 44} width="184" height="42" style={{ overflow: "visible" }}>
                     <div
-                      className="flex items-center gap-1 rounded-md border border-[var(--lab-border)] bg-[oklch(0.12_0.02_260/0.97)] px-1.5 py-1 shadow-lg"
+                      className="flex flex-wrap items-center gap-1 rounded-md border border-[var(--lab-border)] bg-[oklch(0.12_0.02_260/0.97)] px-1.5 py-1 shadow-lg"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {WIRE_COLORS.map((c) => (
@@ -682,7 +732,7 @@ export function TrainerKit({
           })}
 
           {/* ---------- Clock generator ---------- */}
-          <g transform={`translate(${MATRIX_X - 200}, ${INPUT_TAP_Y + 60})`}>
+          <g transform={`translate(${MATRIX_X - 200}, ${INPUT_TAP_Y + 36})`}>
             <rect width="140" height="90" rx="8" fill="oklch(0.15 0.03 265 / .7)" stroke="var(--lab-border)" />
             <text x="12" y="18" fontFamily="ui-monospace, monospace" fontSize="9" letterSpacing="1.5" fill="var(--lab-muted)">
               CLOCK GEN
@@ -715,7 +765,7 @@ export function TrainerKit({
 
           {/* ---------- Manual input switches ---------- */}
           <g>
-            <text x={tapX(0)} y={INPUT_TAP_Y + 60 - 14} fontFamily="ui-monospace, monospace" fontSize="9" letterSpacing="1.5" fill="var(--lab-muted)">
+            <text x={tapX(0)} y={INPUT_TAP_Y + 36 - 14} fontFamily="ui-monospace, monospace" fontSize="9" letterSpacing="1.5" fill="var(--lab-muted)">
               MANUAL INPUT SWITCHES
             </text>
             {Array.from({ length: 8 }, (_, i) => i).map((i) => {
@@ -723,14 +773,14 @@ export function TrainerKit({
               return (
                 <g
                   key={`sw-${i}`}
-                  transform={`translate(${x - 17}, ${INPUT_TAP_Y + 60})`}
+                  transform={`translate(${x - 17}, ${INPUT_TAP_Y + 36})`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onToggleInput(i);
                   }}
                   style={{ cursor: "pointer" }}
                 >
-                  <line x1={17} y1={-40} x2={17} y2={0} stroke="var(--lab-border)" strokeWidth="1.5" strokeDasharray="2 3" />
+                  <line x1={17} y1={-36} x2={17} y2={0} stroke="var(--lab-border)" strokeWidth="1.5" strokeDasharray="2 3" />
                   <rect width="34" height="60" rx="6" fill="oklch(0.13 0.02 260)" stroke="var(--lab-border)" />
                   <rect
                     x="4"
