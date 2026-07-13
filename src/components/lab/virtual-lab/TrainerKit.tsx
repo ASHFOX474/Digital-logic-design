@@ -563,8 +563,6 @@ export function TrainerKit({
             const isSelected = selectedWireId === w.id;
             const isHovered = hoveredWireId === w.id;
             const isEditingThis = endpointEdit?.wireId === w.id;
-            const midX = (fromPt.x + toPt.x) / 2;
-            const midY = snap((fromPt.y + toPt.y) / 2) + offset;
             return (
               <g
                 key={w.id}
@@ -622,44 +620,6 @@ export function TrainerKit({
                   return <circle key={end} cx={pt.x} cy={pt.y} r={isSelected ? 6.5 : 3.5} fill={isSelected ? "white" : colorVar(w.color)} stroke={isSelected ? colorVar(w.color) : "none"} strokeWidth={isSelected ? 2.5 : 0} />;
                 })}
 
-                {/* Recolor / delete popup for the selected wire. */}
-                {isSelected && !endpointEdit && (
-                  <foreignObject x={midX - 92} y={midY - 44} width="184" height="42" style={{ overflow: "visible" }}>
-                    <div
-                      className="flex flex-wrap items-center gap-1 rounded-md border border-[var(--lab-border)] bg-[oklch(0.12_0.02_260/0.97)] px-1.5 py-1 shadow-lg"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {WIRE_COLORS.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          aria-label={`Recolor to ${c.id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onChangeWireColor(w.id, c.id);
-                          }}
-                          className="h-3.5 w-3.5 shrink-0 rounded-full border"
-                          style={{
-                            background: c.swatch,
-                            borderColor: w.color === c.id ? "var(--lab-ink)" : "transparent",
-                            boxShadow: w.color === c.id ? `0 0 6px ${c.swatch}` : "none",
-                          }}
-                        />
-                      ))}
-                      <button
-                        type="button"
-                        aria-label="Delete wire"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRemoveWire(w.id);
-                        }}
-                        className="ml-1 shrink-0 rounded px-1.5 font-mono text-[11px] font-bold leading-4 text-[var(--lab-warm)] hover:bg-[oklch(0.35_0.15_25/0.35)]"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </foreignObject>
-                )}
               </g>
             );
           })}
@@ -818,10 +778,13 @@ export function TrainerKit({
             ))}
           </g>
 
-          {/* ---------- Selected wire's endpoint drag handles ---------- */}
-          {/* Rendered last (topmost) so re-routing always works, even while the wire/
-             extractor tool is armed and the hole hit-layer above would otherwise
-             swallow the pointerdown before it reaches the endpoint circle. */}
+          {/* ---------- Selected wire's topmost UI: scrim + recolor/delete popup + endpoint drag handles ---------- */}
+          {/* Rendered last (topmost) so none of this is ever covered or click-blocked by an IC
+             or the hole hit-layer drawn earlier. While the recolor/delete popup is open, an
+             invisible full-board scrim sits directly beneath it (but above everything else):
+             any click that doesn't land on the popup itself or a drag handle falls through to
+             the scrim, which just deselects — so nothing underneath is reachable/selectable
+             while the popup is showing, and clicking anywhere outside it closes it. */}
           {selectedWireId &&
             (() => {
               const w = wires.find((wire) => wire.id === selectedWireId);
@@ -830,8 +793,26 @@ export function TrainerKit({
               const isDraggingTo = dragEndpoint?.wireId === w.id && dragEndpoint.end === "to";
               const fromPt = isDraggingFrom ? { ...w.from, x: dragEndpoint!.x, y: dragEndpoint!.y } : w.from;
               const toPt = isDraggingTo ? { ...w.to, x: dragEndpoint!.x, y: dragEndpoint!.y } : w.to;
+              const offset = isDraggingFrom || isDraggingTo ? 0 : wireOffset(w);
+              const midX = (fromPt.x + toPt.x) / 2;
+              const midY = snap((fromPt.y + toPt.y) / 2) + offset;
+              const showPopup = !endpointEdit;
               return (
                 <g>
+                  {showPopup && (
+                    <rect
+                      x={0}
+                      y={0}
+                      width={VIEW.w}
+                      height={VIEW.h}
+                      fill="transparent"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectWire(null);
+                      }}
+                    />
+                  )}
+
                   {(["from", "to"] as const).map((end) => {
                     const pt = end === "from" ? fromPt : toPt;
                     const beingMoved = dragEndpoint?.wireId === w.id && dragEndpoint.end === end;
@@ -858,6 +839,45 @@ export function TrainerKit({
                       </circle>
                     );
                   })}
+
+                  {/* Recolor / delete popup for the selected wire. */}
+                  {showPopup && (
+                    <foreignObject x={midX - 92} y={midY - 44} width="184" height="42" style={{ overflow: "visible" }}>
+                      <div
+                        className="flex flex-wrap items-center gap-1 rounded-md border border-[var(--lab-border)] bg-[oklch(0.12_0.02_260/0.97)] px-1.5 py-1 shadow-lg"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {WIRE_COLORS.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            aria-label={`Recolor to ${c.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onChangeWireColor(w.id, c.id);
+                            }}
+                            className="h-3.5 w-3.5 shrink-0 rounded-full border"
+                            style={{
+                              background: c.swatch,
+                              borderColor: w.color === c.id ? "var(--lab-ink)" : "transparent",
+                              boxShadow: w.color === c.id ? `0 0 6px ${c.swatch}` : "none",
+                            }}
+                          />
+                        ))}
+                        <button
+                          type="button"
+                          aria-label="Delete wire"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveWire(w.id);
+                          }}
+                          className="ml-1 shrink-0 rounded px-1.5 font-mono text-[11px] font-bold leading-4 text-[var(--lab-warm)] hover:bg-[oklch(0.35_0.15_25/0.35)]"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </foreignObject>
+                  )}
                 </g>
               );
             })()}
