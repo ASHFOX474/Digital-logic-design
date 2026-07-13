@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./docs/banner.svg" alt="Digital Logic Design banner" width="100%" />
+  <img src="./banner.svg" alt="Digital Logic Design banner" width="100%" />
 </p>
 
 <p align="center">
