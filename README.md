@@ -201,5 +201,5 @@ npm run format       # Format the codebase with Prettier
 - The Boolean Algebra Reference above renders as math on platforms that support GitHub-flavored LaTeX (`$$...$$`); if viewed somewhere that doesn't render math, the raw LaTeX source is still readable as plain text.
 
 <p align="center">
-  <sub>Built for exploring Digital Logic Design — no breadboard required.</sub>
+  <sub>Built for exploring Digital Logic Design.</sub>
 </p>
