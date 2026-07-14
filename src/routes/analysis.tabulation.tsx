@@ -268,13 +268,13 @@ function TabulationPage() {
             {round.round === 0 ? "TABLE 0 — INITIAL MINTERMS" : `TABLE ${round.round} — ROUND ${round.round} COMBINATIONS`}
           </h2>
           <div className="mt-2 overflow-x-auto rounded-md border border-[var(--lab-border)]">
-            <table className="w-full font-mono text-xs">
+            <table className="w-full font-mono text-sm">
               <thead>
                 <tr className="border-b border-[var(--lab-border)] text-[var(--lab-muted)]">
-                  <th className="px-3 py-2 text-left tracking-[0.15em]">GROUP</th>
-                  <th className="px-3 py-2 text-left tracking-[0.15em]">MINTERMS</th>
-                  <th className="px-3 py-2 text-left tracking-[0.15em]">BINARY ({parsed.vars.join("")})</th>
-                  <th className="px-3 py-2 text-center tracking-[0.15em]">USED</th>
+                  <th className="px-3 py-2.5 text-left text-xs tracking-[0.15em]">GROUP</th>
+                  <th className="px-3 py-2.5 text-left text-xs tracking-[0.15em]">MINTERMS</th>
+                  <th className="px-3 py-2.5 text-left text-xs tracking-[0.15em]">BINARY ({parsed.vars.join("")})</th>
+                  <th className="px-3 py-2.5 text-center text-xs tracking-[0.15em]">USED</th>
                 </tr>
               </thead>
               <tbody>
@@ -288,17 +288,17 @@ function TabulationPage() {
                       {ti === 0 && (
                         <td
                           rowSpan={grp.terms.length}
-                          className="border-r border-[var(--lab-border)] px-3 py-2 text-center font-bold"
+                          className="border-r border-[var(--lab-border)] px-3 py-2.5 text-center font-bold"
                           style={{ color: "var(--lab-purple)" }}
                         >
                           {grp.ones}
                         </td>
                       )}
-                      <td className="px-3 py-2 text-[var(--lab-muted)]">
+                      <td className="px-3 py-2.5 text-[var(--lab-muted)]">
                         {t.covers.join(",")}
                         {t.isDC && <span className="ml-1 text-[var(--lab-warm)]">(d)</span>}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2.5 tracking-[0.1em]">
                         <span style={{ color: "var(--lab-cyan)" }}>
                           {t.bits.split("").map((ch, ci) => (
                             <span key={ci} style={{ color: ch === "-" ? "var(--lab-warm)" : "var(--lab-cyan)" }}>
@@ -307,7 +307,7 @@ function TabulationPage() {
                           ))}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-center">
+                      <td className="px-3 py-2.5 text-center">
                         {t.checked ? (
                           <span style={{ color: "var(--lab-mint)" }}>✓</span>
                         ) : (
@@ -340,7 +340,7 @@ function TabulationPage() {
                 return (
                   <span
                     key={pi.bits}
-                    className="rounded-md border px-2 py-1 font-mono text-xs"
+                    className="rounded-md border px-2.5 py-1.5 font-mono text-sm"
                     style={{
                       borderColor: isEssential
                         ? "var(--lab-mint)"
@@ -370,12 +370,12 @@ function TabulationPage() {
             <div className="mt-6">
               <h2 className="text-xs tracking-[0.25em] text-[var(--lab-muted)]">PRIME IMPLICANT COVER CHART</h2>
               <div className="mt-2 overflow-x-auto rounded-md border border-[var(--lab-border)]">
-                <table className="font-mono text-xs">
+                <table className="font-mono text-sm">
                   <thead>
                     <tr className="border-b border-[var(--lab-border)]">
-                      <th className="px-3 py-2 text-left text-[var(--lab-muted)] tracking-[0.1em]">PI / Minterm →</th>
+                      <th className="px-3 py-2.5 text-left text-xs text-[var(--lab-muted)] tracking-[0.1em]">PI / Minterm →</th>
                       {parsed.reqMinterms.map((m) => (
-                        <th key={m} className="px-3 py-2 text-center text-[var(--lab-cyan)]">{m}</th>
+                        <th key={m} className="px-3 py-2.5 text-center text-[var(--lab-cyan)]">{m}</th>
                       ))}
                     </tr>
                   </thead>
@@ -389,12 +389,12 @@ function TabulationPage() {
                           className="border-b border-[var(--lab-border)/50]"
                           style={{ color: isEPI ? "var(--lab-mint)" : isSel ? "var(--lab-cyan)" : "var(--lab-muted)" }}
                         >
-                          <td className="border-r border-[var(--lab-border)] px-3 py-1.5 text-left">
+                          <td className="border-r border-[var(--lab-border)] px-3 py-2 text-left">
                             <ExprView expr={termToProduct(pi.bits, parsed.vars)} />
-                            {isEPI && <span className="ml-1 text-[8px]">★</span>}
+                            {isEPI && <span className="ml-1 text-[10px]">★</span>}
                           </td>
                           {parsed.reqMinterms.map((m) => (
-                            <td key={m} className="px-3 py-1.5 text-center">
+                            <td key={m} className="px-3 py-2 text-center">
                               {pi.covers.includes(m) ? (
                                 <span style={{ color: isEPI ? "var(--lab-mint)" : "var(--lab-cyan)" }}>×</span>
                               ) : (
